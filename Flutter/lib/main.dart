@@ -229,29 +229,41 @@ class _MyFilesPageState extends State<MyFilesPage> {
   Widget _buildFileFolderList() {
     return ListView(
       children: [
-        // Display Folders
-        if (folders.isNotEmpty)
-          ...folders.map((folder) {
-            return FileFolder(
-              name: folder['name'],
-              isFile: false,
-              thumbnail: Icon(Icons.folder, size: 40), // Default icon
-              onOptionsTap: () => _showOptions(context, folder),
-              onOpenFileFolder: () => _openCloudFolder(context, folder),
-            );
-          }).toList(),
+        if (folders.isNotEmpty || files.isNotEmpty) ...[
+          // Display Folders
+          if (folders.isNotEmpty)
+            ...folders.map((folder) {
+              return FileFolder(
+                name: folder['name'],
+                isFile: false,
+                thumbnail: Icon(Icons.folder, size: 40), // Default icon
+                onOptionsTap: () => _showOptions(context, folder),
+                onOpenFileFolder: () => _openCloudFolder(context, folder),
+              );
+            }).toList(),
 
-        // Display Files
-        if (files.isNotEmpty)
-          ...files.map((file) {
-            return FileFolder(
-              name: file['name'],
-              isFile: true,
-              thumbnail: Image.network(file['thumbnail']),
-              onOptionsTap: () => _showOptions(context, file),
-              onOpenFileFolder: () => _showOptions(context, file),
-            );
-          }).toList(),
+          // Display Files
+          if (files.isNotEmpty)
+            ...files.map((file) {
+              return FileFolder(
+                name: file['name'],
+                isFile: true,
+                thumbnail: Image.network(file['thumbnail']),
+                onOptionsTap: () => _showOptions(context, file),
+                onOpenFileFolder: () => _showOptions(context, file),
+              );
+            }).toList(),
+        ] else ...[
+          Center(
+            child: Padding(
+              padding: EdgeInsets.all(16.0),
+              child: Text(
+                "This folder is empty",
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ),
+        ],
       ],
     );
   }
