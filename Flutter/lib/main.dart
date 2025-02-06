@@ -165,17 +165,18 @@ class _MyFilesPageState extends State<MyFilesPage> {
   List<dynamic> folders = [];
   List<dynamic> files = [];
   int _selectedIndex = 0; // For bottom navigation index
+  List<int> prevFolderId = [0, 0];
 
   @override
   void initState() {
     super.initState();
-    _fetchFilesAndFolders();
+    _fetchFilesAndFolders(0);
   }
 
   // Fetch files and folders using the API
-  Future<void> _fetchFilesAndFolders() async {
+  Future<void> _fetchFilesAndFolders(fld_id) async {
     final response = await http.get(
-      Uri.parse('https://filelu.com/api/folder/list?fld_id=0&sess_id=${widget.sessionId}'),
+      Uri.parse('https://filelu.com/api/folder/list?fld_id=$fld_id&sess_id=${widget.sessionId}'),
     );
 
     if (response.statusCode == 200) {
@@ -236,6 +237,7 @@ class _MyFilesPageState extends State<MyFilesPage> {
               isFile: false,
               thumbnail: Icon(Icons.folder, size: 40), // Default icon
               onOptionsTap: () => _showOptions(context, folder),
+              onOpenFileFolder: () => _openCloudFolder(context, folder),
             );
           }).toList(),
 
@@ -247,6 +249,7 @@ class _MyFilesPageState extends State<MyFilesPage> {
               isFile: true,
               thumbnail: Image.network(file['thumbnail']),
               onOptionsTap: () => _showOptions(context, file),
+              onOpenFileFolder: () => _showOptions(context, file),
             );
           }).toList(),
       ],
@@ -294,6 +297,33 @@ class _MyFilesPageState extends State<MyFilesPage> {
     );
   }
 
+  // Open Cloud Folder and show Files/Folders in it.
+  void _openCloudFolder(BuildContext context, dynamic item) async {
+    try {
+      await _fetchFilesAndFolders(item["fld_id"]);
+      prevFolderId.add(item['fld_id']);
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+    }
+  }
+
+  void _backCloudFolder() async {
+    try {
+      prevFolderId.removeLast();
+      await _fetchFilesAndFolders(prevFolderId.last);
+    } catch (e) {
+      print(e);
+    }
+  }
+
+  void _homeCloudFolder() async {
+    try {
+      prevFolderId = [0, 0];
+      await _fetchFilesAndFolders(prevFolderId.last);
+    } catch (e) {
+      print(e);
+    }
+  }
   // Example function to download the file
   void _downloadFile(String link) {
     // Implement the logic to download the file (can use packages like `url_launcher` or `dio`)
@@ -305,7 +335,23 @@ class _MyFilesPageState extends State<MyFilesPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('My Files')),
+      appBar: AppBar(
+        title: Text('My Files'),
+        leading: IconButton(
+          icon: Icon(Icons.arrow_back),
+          onPressed: () {
+            _backCloudFolder();
+          },
+        ),
+        actions: [
+          IconButton(
+            icon: Icon(Icons.home),
+            onPressed: () {
+              _homeCloudFolder();
+            },
+          ),
+        ],
+      ),
       body: _getPageContent(),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _selectedIndex,
@@ -335,12 +381,14 @@ class FileFolder extends StatelessWidget {
   final bool isFile;
   final Widget thumbnail;
   final VoidCallback onOptionsTap;
+  final VoidCallback onOpenFileFolder;
 
   const FileFolder({
     required this.name,
     required this.isFile,
     required this.thumbnail,
     required this.onOptionsTap,
+    required this.onOpenFileFolder,
   });
 
   @override
@@ -352,6 +400,7 @@ class FileFolder extends StatelessWidget {
         icon: Icon(Icons.more_vert),
         onPressed: onOptionsTap,
       ),
+      onTap: onOpenFileFolder,
     );
   }
 }
