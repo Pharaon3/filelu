@@ -1,5 +1,5 @@
-import 'package:flutter/material.dart';
 import 'dart:convert';
+import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
 void main() {
@@ -10,11 +10,12 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'File Sync App',
+      title: 'File Manager',
       theme: ThemeData(
         primarySwatch: Colors.blue,
       ),
-      home: LoginPage(),
+      // home: LoginPage(),
+      home: MyFilesPage(sessionId: "6f9e1a5eea407bb4d98f841e1a5d7dc1"),
     );
   }
 }
@@ -107,7 +108,6 @@ class _OtpPageState extends State<OtpPage> {
     if (widget.requestToken.isNotEmpty && otp.isNotEmpty) {
       final response = await http.get(Uri.parse(
           'https://filelu.com/api/session/start?request_token=${widget.requestToken}&otp=$otp'));
-
       if (response.statusCode == 200) {
         var data = jsonDecode(response.body);
         String sessionId = "";
@@ -162,6 +162,7 @@ class MyFilesPage extends StatefulWidget {
 class _MyFilesPageState extends State<MyFilesPage> {
   List<dynamic> folders = [];
   List<dynamic> files = [];
+  int _selectedIndex = 0; // For bottom navigation index
 
   @override
   void initState() {
@@ -186,50 +187,101 @@ class _MyFilesPageState extends State<MyFilesPage> {
     }
   }
 
-  // Handle file/folder options (e.g., rename, download)
-  void _showFileOptions(BuildContext context, dynamic item) {
+  Future<String> _getDownloadLink(fileCode) async {
+    final response = await http.get(
+      Uri.parse('https://filelu.com/api/file/direct_link?file_code=${fileCode}&sess_id=${widget.sessionId}')
+    );
+
+    if (response.statusCode == 200) {
+      var data = jsonDecode(response.body);
+      Uri.parse(data['result']['url']);
+      return data['result']['url'];
+    } else {
+      return "cannot get download link";
+    }
+  }
+
+  // Handle navigation between pages
+  void _onItemTapped(int index) {
+    setState(() {
+      _selectedIndex = index;
+    });
+  }
+
+  // Display different pages based on navigation selection
+  Widget _getPageContent() {
+    switch (_selectedIndex) {
+      case 0:
+        return _buildFileFolderList();
+      case 1:
+        return Center(child: Text("Sync Page"));
+      case 2:
+        return Center(child: Text("Upload Page"));
+      default:
+        return _buildFileFolderList();
+    }
+  }
+
+  // Display file/folder list with options
+  Widget _buildFileFolderList() {
+    return ListView(
+      children: [
+        // Display Folders
+        if (folders.isNotEmpty)
+          ...folders.map((folder) {
+            return FileFolder(
+              name: folder['name'],
+              isFile: false,
+              thumbnail: Icon(Icons.folder, size: 40), // Default icon
+              onOptionsTap: () => _showOptions(context, folder),
+            );
+          }).toList(),
+
+        // Display Files
+        if (files.isNotEmpty)
+          ...files.map((file) {
+            return FileFolder(
+              name: file['name'],
+              isFile: true,
+              thumbnail: Image.network(file['thumbnail']),
+              onOptionsTap: () => _showOptions(context, file),
+            );
+          }).toList(),
+      ],
+    );
+  }
+
+  // Show options (Rename, Copy, Move To, Download, Remove) for file/folder
+  void _showOptions(BuildContext context, dynamic item) {
     showModalBottomSheet(
       context: context,
       builder: (context) {
-        return ListView(
-          children: [
-            ListTile(
-              title: Text('Rename'),
-              onTap: () {
-                // Implement rename logic here
-                Navigator.pop(context);
-              },
-            ),
-            ListTile(
-              title: Text('Download'),
-              onTap: () {
-                // Implement download logic here
-                Navigator.pop(context);
-                _downloadFile(item['link']);
-              },
-            ),
-            ListTile(
-              title: Text('Remove'),
-              onTap: () {
-                // Implement remove logic here
-                Navigator.pop(context);
-              },
-            ),
-            ListTile(
-              title: Text('Move To'),
-              onTap: () {
-                // Implement move functionality here
-                Navigator.pop(context);
-              },
-            ),
-            ListTile(
-              title: Text('Copy'),
-              onTap: () {
-                // Implement copy functionality here
-                Navigator.pop(context);
-              },
-            ),
-          ],
+        return FileOptions(
+          item: item,
+          onRename: () {
+            Navigator.pop(context);
+            // Implement Rename Logic here
+            print('Rename ${item['name']}');
+          },
+          onCopy: () {
+            Navigator.pop(context);
+            // Implement Copy Logic here
+            print('Copy ${item['name']}');
+          },
+          onMove: () {
+            Navigator.pop(context);
+            // Implement Move Logic here
+            print('Move ${item['name']}');
+          },
+          onDownload: () {
+            Navigator.pop(context);
+            _downloadFile(item['file_code']);
+          },
+          onRemove: () {
+            Navigator.pop(context);
+            // Implement Remove Logic here
+            print('Remove ${item['name']}');
+          },
         );
       },
     );
@@ -238,59 +290,108 @@ class _MyFilesPageState extends State<MyFilesPage> {
   // Example function to download the file
   void _downloadFile(String link) {
     // Implement the logic to download the file (can use packages like `url_launcher` or `dio`)
-    print('Downloading file from $link');
+    String donwloadLink = _getDownloadLink(link).toString();
+    print('Downloading file from $donwloadLink');
+
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: Text('My Files')),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: ListView(
-          children: [
-            // Display Folders
-            if (folders.isNotEmpty)
-              ...folders.map((folder) {
-                return ListTile(
-                  leading: Icon(Icons.folder),
-                  title: Text(folder['name']),
-                  trailing: IconButton(
-                    icon: Icon(Icons.more_vert),
-                    onPressed: () => _showFileOptions(context, folder),
-                  ),
-                );
-              }).toList(),
-            
-            // Display Files
-            if (files.isNotEmpty)
-              ...files.map((file) {
-                return ListTile(
-                  leading: Image.network(file['thumbnail']),
-                  title: Text(file['name']),
-                  trailing: IconButton(
-                    icon: Icon(Icons.more_vert),
-                    onPressed: () => _showFileOptions(context, file),
-                  ),
-                );
-              }).toList(),
-          ],
-        ),
+      body: _getPageContent(),
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: _selectedIndex,
+        onTap: _onItemTapped,
+        items: [
+          BottomNavigationBarItem(
+            icon: Icon(Icons.folder),
+            label: 'My Files',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.sync),
+            label: 'Sync',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.upload),
+            label: 'Upload',
+          ),
+        ],
       ),
     );
   }
 }
 
-class FileFolder {
+// A widget for displaying files or folders in the list
+class FileFolder extends StatelessWidget {
   final String name;
-  final String id; // You can add more fields if necessary
+  final bool isFile;
+  final Widget thumbnail;
+  final VoidCallback onOptionsTap;
 
-  FileFolder({required this.name, required this.id});
+  const FileFolder({
+    required this.name,
+    required this.isFile,
+    required this.thumbnail,
+    required this.onOptionsTap,
+  });
 
-  factory FileFolder.fromJson(Map<String, dynamic> json) {
-    return FileFolder(
-      name: json['name'],
-      id: json['id'],
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      leading: thumbnail,
+      title: Text(name),
+      trailing: IconButton(
+        icon: Icon(Icons.more_vert),
+        onPressed: onOptionsTap,
+      ),
+    );
+  }
+}
+
+// A widget for showing file/folder options
+class FileOptions extends StatelessWidget {
+  final dynamic item;
+  final VoidCallback onRename;
+  final VoidCallback onCopy;
+  final VoidCallback onMove;
+  final VoidCallback onDownload;
+  final VoidCallback onRemove;
+
+  const FileOptions({
+    required this.item,
+    required this.onRename,
+    required this.onCopy,
+    required this.onMove,
+    required this.onDownload,
+    required this.onRemove,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      children: [
+        ListTile(
+          title: Text('Rename'),
+          onTap: onRename,
+        ),
+        ListTile(
+          title: Text('Copy'),
+          onTap: onCopy,
+        ),
+        ListTile(
+          title: Text('Move To'),
+          onTap: onMove,
+        ),
+        ListTile(
+          title: Text('Download'),
+          onTap: onDownload,
+        ),
+        ListTile(
+          title: Text('Remove'),
+          onTap: onRemove,
+        ),
+      ],
     );
   }
 }
