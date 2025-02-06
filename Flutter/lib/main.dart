@@ -414,8 +414,12 @@ class SyncPage extends StatefulWidget {
 class _SyncPageState extends State<SyncPage> {
   List<String> cloudFiles = [];
   List<String> localFiles = [];
+  List<String> cloudFolders = [];
+  List<String> localFolders = [];
   List<String> missingOnCloud = [];
   List<String> missingLocally = [];
+  List<String> missingFoldersOnCloud = [];
+  List<String> missingFoldersLocally = [];
 
   @override
   void initState() {
@@ -423,7 +427,7 @@ class _SyncPageState extends State<SyncPage> {
     _compareRepositories();
   }
 
-  Future<void> _fetchCloudFiles() async {
+  Future<void> _fetchCloudData() async {
     final response = await http.get(
       Uri.parse('https://filelu.com/api/folder/list?fld_id=0&sess_id=${widget.sessionId}'),
     );
@@ -432,24 +436,34 @@ class _SyncPageState extends State<SyncPage> {
       var data = jsonDecode(response.body);
       setState(() {
         cloudFiles = List<String>.from(data['result']['files'].map((file) => file['name']));
+        cloudFolders = List<String>.from(data['result']['folders'].map((folder) => folder['name']));
       });
     } else {
-      print('Failed to load cloud files');
+      print('Failed to load cloud data');
     }
   }
 
-  void _fetchLocalFiles() async {
-    Directory? dir;
-    
+  void _fetchLocalData() {
+    String localPath;
     if (Platform.isWindows) {
-      dir = Directory('${Platform.environment['USERPROFILE']}\\Documents\\MySyncFolder');
-    } else if (Platform.isMacOS || Platform.isLinux) {
-      dir = Directory('${Platform.environment['HOME']}/MySyncFolder');
+      localPath = "C:\\Users\\1\\Documents\\MySyncFolder";
+    } else {
+      localPath = "/storage/emulated/0/MySyncFolder";
     }
 
-    if (dir != null && dir.existsSync()) {
+    Directory dir = Directory(localPath);
+    if (dir.existsSync()) {
       setState(() {
-        localFiles = dir!.listSync().map((e) => e.path.split(Platform.pathSeparator).last).toList();
+        localFiles = dir
+            .listSync()
+            .where((e) => e is File)
+            .map((e) => e.path.split(Platform.pathSeparator).last)
+            .toList();
+        localFolders = dir
+            .listSync()
+            .where((e) => e is Directory)
+            .map((e) => e.path.split(Platform.pathSeparator).last)
+            .toList();
       });
     } else {
       print("Local folder does not exist");
@@ -457,26 +471,29 @@ class _SyncPageState extends State<SyncPage> {
   }
 
   void _compareRepositories() async {
-    await _fetchCloudFiles();
-    _fetchLocalFiles();
-
+    await _fetchCloudData();
+    _fetchLocalData();
     setState(() {
       missingOnCloud = localFiles.where((file) => !cloudFiles.contains(file)).toList();
       missingLocally = cloudFiles.where((file) => !localFiles.contains(file)).toList();
+      missingFoldersOnCloud = localFolders.where((folder) => !cloudFolders.contains(folder)).toList();
+      missingFoldersLocally = cloudFolders.where((folder) => !localFolders.contains(folder)).toList();
     });
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('Sync Files')),
+      appBar: AppBar(title: Text('Sync Files & Folders')),
       body: Column(
         children: [
           Expanded(
             child: ListView(
               children: [
-                ListTile(title: Text("Missing on Cloud"), subtitle: Text(missingOnCloud.join(", "))),
-                ListTile(title: Text("Missing Locally"), subtitle: Text(missingLocally.join(", "))),
+                ListTile(title: Text("Missing Files on Cloud"), subtitle: Text(missingOnCloud.join(", "))),
+                ListTile(title: Text("Missing Files Locally"), subtitle: Text(missingLocally.join(", "))),
+                ListTile(title: Text("Missing Folders on Cloud"), subtitle: Text(missingFoldersOnCloud.join(", "))),
+                ListTile(title: Text("Missing Folders Locally"), subtitle: Text(missingFoldersLocally.join(", "))),
               ],
             ),
           ),
