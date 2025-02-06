@@ -215,6 +215,20 @@ class _MyFilesPageState extends State<MyFilesPage> {
                 Navigator.pop(context);
               },
             ),
+            ListTile(
+              title: Text('Move To'),
+              onTap: () {
+                // Implement move functionality here
+                Navigator.pop(context);
+              },
+            ),
+            ListTile(
+              title: Text('Copy'),
+              onTap: () {
+                // Implement copy functionality here
+                Navigator.pop(context);
+              },
+            ),
           ],
         );
       },
