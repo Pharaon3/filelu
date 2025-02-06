@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
+import 'package:open_file/open_file.dart';
 
 void main() {
   runApp(MyApp());
@@ -192,7 +193,7 @@ class _MyFilesPageState extends State<MyFilesPage> {
 
   Future<String> _getDownloadLink(fileCode) async {
     final response = await http.get(
-      Uri.parse('https://filelu.com/api/file/direct_link?file_code=${fileCode}&sess_id=${widget.sessionId}')
+      Uri.parse('https://filelu.com/api/file/direct_link?file_code=$fileCode&sess_id=${widget.sessionId}')
     );
 
     if (response.statusCode == 200) {
@@ -250,7 +251,7 @@ class _MyFilesPageState extends State<MyFilesPage> {
                 isFile: true,
                 thumbnail: Image.network(file['thumbnail']),
                 onOptionsTap: () => _showOptions(context, file),
-                onOpenFileFolder: () => _showOptions(context, file),
+                onOpenFileFolder: () => openCloudFile(context, file['file_code'], file['name']),
               );
             }).toList(),
         ] else ...[
@@ -319,6 +320,81 @@ class _MyFilesPageState extends State<MyFilesPage> {
     }
   }
 
+  Future<void> openCloudFile(BuildContext context, String file_code, String fileName) async {
+    try {
+      // Get the file response from the cloud
+      String downloadLink = await _getDownloadLink(file_code);
+      final response = await http.get(Uri.parse(downloadLink));
+
+      if (response.statusCode == 200) {
+        // Get the temporary directory
+        Directory tempDir = await getTemporaryDirectory();
+        String filePath = '${tempDir.path}/$fileName';
+
+        // Write the file to the local storage
+        File file = File(filePath);
+        await file.writeAsBytes(response.bodyBytes);
+
+        // Get file extension
+        String fileExtension = fileName.split('.').last.toLowerCase();
+
+        // Check if it's a text or image file and display it inside the app
+        if (['txt'].contains(fileExtension)) {
+          _showTextFile(context, file);
+        } else if (['png', 'jpg', 'jpeg', 'gif'].contains(fileExtension)) {
+          _showImageFile(context, file);
+        } else {
+          print("Unsupported file format: $fileExtension");
+        }
+      } else {
+        print("Failed to download file. Status Code: ${response.statusCode}");
+      }
+    } catch (e) {
+      print("Error: $e");
+    }
+  }
+
+  // Show text file content inside a dialog
+  void _showTextFile(BuildContext context, File file) async {
+    String content = await file.readAsString();
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text("Text File"),
+          content: SingleChildScrollView(
+            child: Text(content),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text("Close"),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // Show image file inside a dialog
+  void _showImageFile(BuildContext context, File file) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text("Image File"),
+          content: Image.file(file),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text("Close"),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   void _backCloudFolder() async {
     try {
       prevFolderId.removeLast();
@@ -337,10 +413,11 @@ class _MyFilesPageState extends State<MyFilesPage> {
     }
   }
   // Example function to download the file
-  void _downloadFile(String link) {
+  void _downloadFile(String link) async {
     // Implement the logic to download the file (can use packages like `url_launcher` or `dio`)
-    String donwloadLink = _getDownloadLink(link).toString();
-    print('Downloading file from $donwloadLink');
+    String downloadLink = await _getDownloadLink(link);
+    // File downloadedFile = await Uri.parse(downloadLink);
+    print('Downloading file from $downloadLink');
 
   }
 
