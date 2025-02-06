@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'dart:io';
+import 'package:path_provider/path_provider.dart';
 
 void main() {
   runApp(MyApp());
@@ -214,7 +216,7 @@ class _MyFilesPageState extends State<MyFilesPage> {
       case 0:
         return _buildFileFolderList();
       case 1:
-        return Center(child: Text("Sync Page"));
+        return _buildSyncPage();
       case 2:
         return Center(child: Text("Upload Page"));
       default:
@@ -249,6 +251,11 @@ class _MyFilesPageState extends State<MyFilesPage> {
           }).toList(),
       ],
     );
+  }
+
+  // Display file/folder list with options
+  Widget _buildSyncPage() {
+    return SyncPage(sessionId: widget.sessionId,);
   }
 
   // Show options (Rename, Copy, Move To, Download, Remove) for file/folder
@@ -392,6 +399,93 @@ class FileOptions extends StatelessWidget {
           onTap: onRemove,
         ),
       ],
+    );
+  }
+}
+
+class SyncPage extends StatefulWidget {
+  final String sessionId;
+  SyncPage({required this.sessionId});
+
+  @override
+  _SyncPageState createState() => _SyncPageState();
+}
+
+class _SyncPageState extends State<SyncPage> {
+  List<String> cloudFiles = [];
+  List<String> localFiles = [];
+  List<String> missingOnCloud = [];
+  List<String> missingLocally = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _compareRepositories();
+  }
+
+  Future<void> _fetchCloudFiles() async {
+    final response = await http.get(
+      Uri.parse('https://filelu.com/api/folder/list?fld_id=0&sess_id=${widget.sessionId}'),
+    );
+
+    if (response.statusCode == 200) {
+      var data = jsonDecode(response.body);
+      setState(() {
+        cloudFiles = List<String>.from(data['result']['files'].map((file) => file['name']));
+      });
+    } else {
+      print('Failed to load cloud files');
+    }
+  }
+
+  void _fetchLocalFiles() async {
+    Directory? dir;
+    
+    if (Platform.isWindows) {
+      dir = Directory('${Platform.environment['USERPROFILE']}\\Documents\\MySyncFolder');
+    } else if (Platform.isMacOS || Platform.isLinux) {
+      dir = Directory('${Platform.environment['HOME']}/MySyncFolder');
+    }
+
+    if (dir != null && dir.existsSync()) {
+      setState(() {
+        localFiles = dir!.listSync().map((e) => e.path.split(Platform.pathSeparator).last).toList();
+      });
+    } else {
+      print("Local folder does not exist");
+    }
+  }
+
+  void _compareRepositories() async {
+    await _fetchCloudFiles();
+    _fetchLocalFiles();
+
+    setState(() {
+      missingOnCloud = localFiles.where((file) => !cloudFiles.contains(file)).toList();
+      missingLocally = cloudFiles.where((file) => !localFiles.contains(file)).toList();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text('Sync Files')),
+      body: Column(
+        children: [
+          Expanded(
+            child: ListView(
+              children: [
+                ListTile(title: Text("Missing on Cloud"), subtitle: Text(missingOnCloud.join(", "))),
+                ListTile(title: Text("Missing Locally"), subtitle: Text(missingLocally.join(", "))),
+              ],
+            ),
+          ),
+          ElevatedButton(
+            onPressed: _compareRepositories,
+            child: Text("Refresh Comparison"),
+          ),
+        ],
+      ),
     );
   }
 }
