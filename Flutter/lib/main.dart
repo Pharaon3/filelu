@@ -4,6 +4,9 @@ import 'package:http/http.dart' as http;
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 import 'package:open_file/open_file.dart';
+import 'package:audioplayers/audioplayers.dart';
+import 'package:video_player/video_player.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 void main() {
   runApp(MyApp());
@@ -205,6 +208,25 @@ class _MyFilesPageState extends State<MyFilesPage> {
     }
   }
 
+  Future<String> getDownloadDirectory() async {
+  if (Platform.isAndroid) {
+    return "/storage/emulated/0/Download"; // Default download folder on Android
+  } else if (Platform.isIOS) {
+    Directory dir = await getApplicationDocumentsDirectory();
+    return dir.path;
+  } else if (Platform.isWindows) {
+    String? userHome = Platform.environment['USERPROFILE']; // Get user home directory
+    return "$userHome\\Documents\\MySyncFolder"; // Default downloads folder in Windows
+  } else if (Platform.isMacOS) {
+    Directory dir = await getDownloadsDirectory() ?? await getApplicationDocumentsDirectory();
+    return dir.path;
+  } else if (Platform.isLinux) {
+    String? home = Platform.environment['HOME'];
+    return "$home/Downloads"; // Default downloads folder in Linux
+  } else {
+    throw Exception("Unsupported platform");
+  }
+}
   // Handle navigation between pages
   void _onItemTapped(int index) {
     setState(() {
@@ -298,7 +320,7 @@ class _MyFilesPageState extends State<MyFilesPage> {
           },
           onDownload: () {
             Navigator.pop(context);
-            _downloadFile(item['file_code']);
+            downloadFile(item['file_code'], item['name']);
           },
           onRemove: () {
             Navigator.pop(context);
@@ -320,9 +342,9 @@ class _MyFilesPageState extends State<MyFilesPage> {
     }
   }
 
+  // Show text file content inside a dialog
   Future<void> openCloudFile(BuildContext context, String file_code, String fileName) async {
     try {
-      // Get the file response from the cloud
       String downloadLink = await _getDownloadLink(file_code);
       final response = await http.get(Uri.parse(downloadLink));
 
@@ -331,18 +353,22 @@ class _MyFilesPageState extends State<MyFilesPage> {
         Directory tempDir = await getTemporaryDirectory();
         String filePath = '${tempDir.path}/$fileName';
 
-        // Write the file to the local storage
+        // Write the file to local storage
         File file = File(filePath);
         await file.writeAsBytes(response.bodyBytes);
 
         // Get file extension
         String fileExtension = fileName.split('.').last.toLowerCase();
 
-        // Check if it's a text or image file and display it inside the app
+        // Check file type and open it
         if (['txt'].contains(fileExtension)) {
           _showTextFile(context, file);
         } else if (['png', 'jpg', 'jpeg', 'gif'].contains(fileExtension)) {
           _showImageFile(context, file);
+        } else if (['mp3', 'wav', 'aac'].contains(fileExtension)) {
+          _playAudioFile(context, file);
+        } else if (['mp4', 'avi', 'mov'].contains(fileExtension)) {
+          _playVideoFile(context, file);
         } else {
           print("Unsupported file format: $fileExtension");
         }
@@ -354,7 +380,7 @@ class _MyFilesPageState extends State<MyFilesPage> {
     }
   }
 
-  // Show text file content inside a dialog
+  // Show text file content
   void _showTextFile(BuildContext context, File file) async {
     String content = await file.readAsString();
     showDialog(
@@ -376,7 +402,7 @@ class _MyFilesPageState extends State<MyFilesPage> {
     );
   }
 
-  // Show image file inside a dialog
+  // Show image file
   void _showImageFile(BuildContext context, File file) {
     showDialog(
       context: context,
@@ -392,6 +418,46 @@ class _MyFilesPageState extends State<MyFilesPage> {
           ],
         );
       },
+    );
+  }
+
+  // Play audio file
+  void _playAudioFile(BuildContext context, File file) {
+    AudioPlayer audioPlayer = AudioPlayer();
+    audioPlayer.play(DeviceFileSource(file.path));
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text("Audio Player"),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.audiotrack, size: 50, color: Colors.blue),
+              SizedBox(height: 10),
+              Text("Playing: ${file.path.split('/').last}"),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                audioPlayer.stop();
+                Navigator.pop(context);
+              },
+              child: Text("Stop"),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // Play video file
+  void _playVideoFile(BuildContext context, File file) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => VideoPlayerScreen(videoFile: file)),
     );
   }
 
@@ -412,15 +478,45 @@ class _MyFilesPageState extends State<MyFilesPage> {
       print(e);
     }
   }
-  // Example function to download the file
-  void _downloadFile(String link) async {
-    // Implement the logic to download the file (can use packages like `url_launcher` or `dio`)
-    String downloadLink = await _getDownloadLink(link);
-    // File downloadedFile = await Uri.parse(downloadLink);
-    print('Downloading file from $downloadLink');
 
+  Future<void> downloadFile(String fileCode, String fileName) async {
+    String saveDirectory = await getDownloadDirectory();
+    try {
+      // Step 1: Get the download link
+      String downloadLink = await _getDownloadLink(fileCode);
+
+      // Step 2: Request storage permission (for Android)
+      if (Platform.isAndroid) {
+        var status = await Permission.storage.request();
+        if (!status.isGranted) {
+          print("Storage permission denied");
+          return;
+        }
+      }
+
+      // Step 3: Get the file from the server
+      final response = await http.get(Uri.parse(downloadLink));
+
+      if (response.statusCode == 200) {
+        // Step 4: Get the custom local directory (e.g., Downloads folder)
+        Directory directory = Directory(saveDirectory);
+        if (!await directory.exists()) {
+          await directory.create(recursive: true);
+        }
+
+        // Step 5: Save the file to the specified path
+        String filePath = '${directory.path}/$fileName';
+        File file = File(filePath);
+        await file.writeAsBytes(response.bodyBytes);
+
+        print("Download complete! File saved at: $filePath");
+      } else {
+        print("Download failed. Server response: ${response.statusCode}");
+      }
+    } catch (e) {
+      print("Error downloading file: $e");
+    }
   }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -640,6 +736,58 @@ class _SyncPageState extends State<SyncPage> {
             child: Text("Refresh Comparison"),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// Video Player Screen
+class VideoPlayerScreen extends StatefulWidget {
+  final File videoFile;
+  VideoPlayerScreen({required this.videoFile});
+
+  @override
+  _VideoPlayerScreenState createState() => _VideoPlayerScreenState();
+}
+
+class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
+  late VideoPlayerController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = VideoPlayerController.file(widget.videoFile)
+      ..initialize().then((_) {
+        setState(() {});
+        _controller.play();
+      });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text("Video Player")),
+      body: Center(
+        child: _controller.value.isInitialized
+            ? AspectRatio(
+                aspectRatio: _controller.value.aspectRatio,
+                child: VideoPlayer(_controller),
+              )
+            : CircularProgressIndicator(),
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () {
+          setState(() {
+            _controller.value.isPlaying ? _controller.pause() : _controller.play();
+          });
+        },
+        child: Icon(_controller.value.isPlaying ? Icons.pause : Icons.play_arrow),
       ),
     );
   }
