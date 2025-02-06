@@ -321,7 +321,11 @@ class _MyFilesPageState extends State<MyFilesPage> {
           },
           onDownload: () {
             Navigator.pop(context);
-            downloadFile(item['file_code'], item['name']);
+            if(item.containsKey('file_code')) {
+              downloadFile(item['file_code'], item['name'], "");
+            } else {
+              downloadFolder(item['fld_id'], item['name']);
+            }
           },
           onRemove: () {
             Navigator.pop(context);
@@ -480,8 +484,9 @@ class _MyFilesPageState extends State<MyFilesPage> {
     }
   }
 
-  Future<void> downloadFile(String fileCode, String fileName) async {
-    String saveDirectory = await getDownloadDirectory();
+  Future<void> downloadFile(String fileCode, String fileName, String filePath) async {
+    String saveDirectory = filePath;
+    if (filePath == "") saveDirectory = await getDownloadDirectory();
     try {
       // Step 1: Get the download link
       String downloadLink = await _getDownloadLink(fileCode);
@@ -518,6 +523,58 @@ class _MyFilesPageState extends State<MyFilesPage> {
       print("Error downloading file: $e");
     }
   }
+
+  Future<void> downloadFolder(int folderID, String folderName, [String subpath = ""]) async {
+    String saveDirectory;
+    if (subpath == "") {
+      saveDirectory = "${await getDownloadDirectory()}/$folderName";
+    } else {
+      saveDirectory = "$subpath/$folderName";
+    }
+    await createFolderIfNotExists(saveDirectory);
+    dynamic fileFolders = await fetchFilesAndFolders(folderID);
+    if (fileFolders.containsKey('folders')) {
+      dynamic folders = fileFolders['folders'];
+      for (dynamic folder in folders) {
+        downloadFolder(folder['fld_id'], folder['name'], saveDirectory);
+      }
+    }
+    if (fileFolders.containsKey('files')) {
+      dynamic files = fileFolders['files'];
+      for (dynamic file in files) {
+        downloadFile(file['file_code'], file['name'], saveDirectory);
+      }
+    }
+  }
+
+  Future<void> createFolderIfNotExists(String path) async {
+    final directory = Directory(path);
+
+    // Check if the directory exists
+    if (await directory.exists()) {
+      print('Directory already exists: $path');
+    } else {
+      // Create the directory
+      await directory.create(recursive: true);
+      print('Directory created: $path');
+    }
+  }
+
+    // Fetch files and folders using the API
+  Future<dynamic> fetchFilesAndFolders(fld_id) async {
+    final response = await http.get(
+      Uri.parse('https://filelu.com/api/folder/list?fld_id=$fld_id&sess_id=${widget.sessionId}'),
+    );
+
+    if (response.statusCode == 200) {
+      var data = jsonDecode(response.body);
+      return data['result'];
+    } else {
+      print('Failed to load folders and files');
+      return [];
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
