@@ -169,7 +169,7 @@ class _MyFilesPageState extends State<MyFilesPage> {
   List<dynamic> folders = [];
   List<dynamic> files = [];
   int _selectedIndex = 0; // For bottom navigation index
-  List<int> prevFolderId = [0, 0];
+  List<dynamic> visitedFolderIDs = [[0, '/'], [0, '/']];
 
   @override
   void initState() {
@@ -209,24 +209,25 @@ class _MyFilesPageState extends State<MyFilesPage> {
   }
 
   Future<String> getDownloadDirectory() async {
-  if (Platform.isAndroid) {
-    return "/storage/emulated/0/Download"; // Default download folder on Android
-  } else if (Platform.isIOS) {
-    Directory dir = await getApplicationDocumentsDirectory();
-    return dir.path;
-  } else if (Platform.isWindows) {
-    String? userHome = Platform.environment['USERPROFILE']; // Get user home directory
-    return "$userHome\\Documents\\MySyncFolder"; // Default downloads folder in Windows
-  } else if (Platform.isMacOS) {
-    Directory dir = await getDownloadsDirectory() ?? await getApplicationDocumentsDirectory();
-    return dir.path;
-  } else if (Platform.isLinux) {
-    String? home = Platform.environment['HOME'];
-    return "$home/Downloads"; // Default downloads folder in Linux
-  } else {
-    throw Exception("Unsupported platform");
+    String subpath = visitedFolderIDs.map((entry) => entry[1]).join('/');
+    if (Platform.isAndroid) {
+      return "/storage/emulated/0/Download"; // Default download folder on Android
+    } else if (Platform.isIOS) {
+      Directory dir = await getApplicationDocumentsDirectory();
+      return dir.path;
+    } else if (Platform.isWindows) {
+      String? userHome = Platform.environment['USERPROFILE']; // Get user home directory
+      return "$userHome\\Documents\\MySyncFolder\\$subpath"; // Default downloads folder in Windows
+    } else if (Platform.isMacOS) {
+      Directory dir = await getDownloadsDirectory() ?? await getApplicationDocumentsDirectory();
+      return dir.path;
+    } else if (Platform.isLinux) {
+      String? home = Platform.environment['HOME'];
+      return "$home/Downloads"; // Default downloads folder in Linux
+    } else {
+      throw Exception("Unsupported platform");
+    }
   }
-}
   // Handle navigation between pages
   void _onItemTapped(int index) {
     setState(() {
@@ -336,7 +337,7 @@ class _MyFilesPageState extends State<MyFilesPage> {
   void _openCloudFolder(BuildContext context, dynamic item) async {
     try {
       await _fetchFilesAndFolders(item["fld_id"]);
-      prevFolderId.add(item['fld_id']);
+      visitedFolderIDs.add([item['fld_id'], item['name']]);
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
     }
@@ -463,8 +464,8 @@ class _MyFilesPageState extends State<MyFilesPage> {
 
   void _backCloudFolder() async {
     try {
-      prevFolderId.removeLast();
-      await _fetchFilesAndFolders(prevFolderId.last);
+      visitedFolderIDs.removeLast();
+      await _fetchFilesAndFolders(visitedFolderIDs.last.first);
     } catch (e) {
       print(e);
     }
@@ -472,8 +473,8 @@ class _MyFilesPageState extends State<MyFilesPage> {
 
   void _homeCloudFolder() async {
     try {
-      prevFolderId = [0, 0];
-      await _fetchFilesAndFolders(prevFolderId.last);
+      visitedFolderIDs = [[0, '/'], [0, '/']];
+      await _fetchFilesAndFolders(visitedFolderIDs.last.first);
     } catch (e) {
       print(e);
     }
