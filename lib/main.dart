@@ -7,6 +7,7 @@ import 'package:open_file/open_file.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:video_player/video_player.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:file_picker/file_picker.dart';
 
 void main() {
   runApp(MyApp());
@@ -348,9 +349,9 @@ class _MyFilesPageState extends State<MyFilesPage> {
   }
 
   // Show text file content inside a dialog
-  Future<void> openCloudFile(BuildContext context, String file_code, String fileName) async {
+  Future<void> openCloudFile(BuildContext context, String fileCode, String fileName) async {
     try {
-      String downloadLink = await _getDownloadLink(file_code);
+      String downloadLink = await _getDownloadLink(fileCode);
       final response = await http.get(Uri.parse(downloadLink));
 
       if (response.statusCode == 200) {
@@ -560,7 +561,7 @@ class _MyFilesPageState extends State<MyFilesPage> {
     }
   }
 
-    // Fetch files and folders using the API
+  // Fetch files and folders using the API
   Future<dynamic> fetchFilesAndFolders(fld_id) async {
     final response = await http.get(
       Uri.parse('https://filelu.com/api/folder/list?fld_id=$fld_id&sess_id=${widget.sessionId}'),
@@ -703,97 +704,232 @@ class SyncPage extends StatefulWidget {
   _SyncPageState createState() => _SyncPageState();
 }
 
-class _SyncPageState extends State<SyncPage> {
-  List<String> cloudFiles = [];
-  List<String> localFiles = [];
-  List<String> cloudFolders = [];
-  List<String> localFolders = [];
-  List<String> missingOnCloud = [];
-  List<String> missingLocally = [];
-  List<String> missingFoldersOnCloud = [];
-  List<String> missingFoldersLocally = [];
+class SyncOrder {
+  String localFolder;
+  String syncType;
+  bool isRunning;
 
-  @override
-  void initState() {
-    super.initState();
-    _compareRepositories();
+  SyncOrder({required this.localFolder, required this.syncType, this.isRunning = false});
+}
+
+class _SyncPageState extends State<SyncPage> {
+  List<SyncOrder> syncOrders = [];
+  Map<SyncOrder, bool> syncRunning = {};
+  String uploadServer = "";
+
+  Future<void> _showAddSyncDialog() async {
+    String selectedSyncType = "Upload Only";
+    TextEditingController folderController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text("Add Sync Order"),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: folderController,
+                decoration: InputDecoration(
+                  labelText: "Local Folder Path",
+                  suffixIcon: IconButton(
+                    icon: Icon(Icons.folder),
+                    onPressed: () async {
+                      String? selectedFolder = await _pickFolder();
+                      if (selectedFolder != null) {
+                        folderController.text = selectedFolder;
+                      }
+                    },
+                  ),
+                ),
+                readOnly: true,
+              ),
+              SizedBox(height: 10),
+              DropdownButton<String>(
+                value: selectedSyncType,
+                items: ["Upload Only", "Download Only", "One-Way Sync", "Two-Way Sync"]
+                    .map((type) => DropdownMenuItem(value: type, child: Text(type)))
+                    .toList(),
+                onChanged: (value) {
+                  setState(() {
+                    selectedSyncType = value!;
+                  });
+                },
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text("Cancel"),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                setState(() {
+                  syncOrders.add(SyncOrder(
+                    localFolder: folderController.text,
+                    syncType: selectedSyncType,
+                  ));
+                });
+                Navigator.pop(context);
+              },
+              child: Text("Add"),
+            ),
+          ],
+        );
+      },
+    );
   }
 
-  Future<void> _fetchCloudData() async {
+  Future<String?> _pickFolder() async {
+    String? selectedFolder;
+    if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
+      selectedFolder = await FilePicker.platform.getDirectoryPath();
+    } else if (Platform.isAndroid || Platform.isIOS) {
+      selectedFolder = await FilePicker.platform.getDirectoryPath();
+    }
+    return selectedFolder;
+  }
+
+  void _startSync(SyncOrder order) async {
+    setState(() {
+      syncRunning[order] = true;
+    });
+
+    while (syncRunning[order] == true) {
+      await _performSync(order);
+      await Future.delayed(Duration(seconds: 10)); // Run every 10 seconds
+    }
+  }
+
+  void _stopSync(SyncOrder order) {
+    setState(() {
+      syncRunning[order] = false;
+    });
+  }
+
+  void _deleteSyncOrder(SyncOrder order) {
+    setState(() {
+      syncOrders.remove(order);
+      syncRunning.remove(order);
+    });
+  }
+
+  Future<void> _performSync(SyncOrder order) async {
+    List<String> cloudFiles = [];
+    List<String> localFiles = [];
+
     final response = await http.get(
       Uri.parse('https://filelu.com/api/folder/list?fld_id=0&sess_id=${widget.sessionId}'),
     );
 
     if (response.statusCode == 200) {
       var data = jsonDecode(response.body);
-      setState(() {
-        cloudFiles = List<String>.from(data['result']['files'].map((file) => file['name']));
-        cloudFolders = List<String>.from(data['result']['folders'].map((folder) => folder['name']));
-      });
-    } else {
-      print('Failed to load cloud data');
-    }
-  }
-
-  void _fetchLocalData() {
-    String localPath;
-    if (Platform.isWindows) {
-      localPath = "C:\\Users\\1\\Documents\\MySyncFolder";
-    } else {
-      localPath = "/storage/emulated/0/MySyncFolder";
+      cloudFiles = List<String>.from(data['result']['files'].map((file) => file['name']));
     }
 
-    Directory dir = Directory(localPath);
+    Directory dir = Directory(order.localFolder);
     if (dir.existsSync()) {
-      setState(() {
-        localFiles = dir
-            .listSync()
-            .where((e) => e is File)
-            .map((e) => e.path.split(Platform.pathSeparator).last)
-            .toList();
-        localFolders = dir
-            .listSync()
-            .where((e) => e is Directory)
-            .map((e) => e.path.split(Platform.pathSeparator).last)
-            .toList();
-      });
-    } else {
-      print("Local folder does not exist");
+      localFiles = dir.listSync().whereType<File>().map((e) => e.path.split(Platform.pathSeparator).last).toList();
+    }
+
+    switch (order.syncType) {
+      case "Upload Only":
+        await _uploadFiles(localFiles, cloudFiles, order.localFolder);
+        break;
+      case "Download Only":
+        await _downloadFiles(localFiles, cloudFiles, order.localFolder);
+        break;
+      case "One-Way Sync":
+        await _uploadFiles(localFiles, cloudFiles, order.localFolder);
+        await _deleteCloudExtras(localFiles, cloudFiles);
+        break;
+      case "Two-Way Sync":
+        await _uploadFiles(localFiles, cloudFiles, order.localFolder);
+        await _downloadFiles(localFiles, cloudFiles, order.localFolder);
+        break;
     }
   }
 
-  void _compareRepositories() async {
-    await _fetchCloudData();
-    _fetchLocalData();
-    setState(() {
-      missingOnCloud = localFiles.where((file) => !cloudFiles.contains(file)).toList();
-      missingLocally = cloudFiles.where((file) => !localFiles.contains(file)).toList();
-      missingFoldersOnCloud = localFolders.where((folder) => !cloudFolders.contains(folder)).toList();
-      missingFoldersLocally = cloudFolders.where((folder) => !localFolders.contains(folder)).toList();
-    });
+  Future<void> _uploadFiles(List<String> localFiles, List<String> cloudFiles, String localFolder) async {
+    for (String file in localFiles) {
+      if (!cloudFiles.contains(file)) {
+        String filePath = "$localFolder${Platform.pathSeparator}$file";
+        File uploadFile = File(filePath);
+        if (uploadFile.existsSync()) {
+          FileUploader uploader = FileUploader(sessionId: widget.sessionId);
+          await uploader.uploadFile(filePath);
+        }
+      }
+    }
+  }
+
+  Future<void> _downloadFiles(List<String> localFiles, List<String> cloudFiles, String localFolder) async {
+    for (String file in cloudFiles) {
+      if (!localFiles.contains(file)) {
+        String downloadLink = await _getDownloadLink(file);
+        var response = await http.get(Uri.parse(downloadLink));
+        if (response.statusCode == 200) {
+          File localFile = File("$localFolder${Platform.pathSeparator}$file");
+          await localFile.writeAsBytes(response.bodyBytes);
+          print("Downloaded: $file");
+        }
+      }
+    }
+  }
+
+  Future<void> _deleteCloudExtras(List<String> localFiles, List<String> cloudFiles) async {
+    for (String file in cloudFiles) {
+      if (!localFiles.contains(file)) {
+        await http.get(Uri.parse('https://filelu.com/api/file/delete?file_name=$file&sess_id=${widget.sessionId}'));
+        print("Deleted from cloud: $file");
+      }
+    }
+  }
+
+  Future<String> _getDownloadLink(String fileCode) async {
+    final response = await http.get(
+      Uri.parse('https://filelu.com/api/file/direct_link?file_code=$fileCode&sess_id=${widget.sessionId}'),
+    );
+    if (response.statusCode == 200) {
+      var data = jsonDecode(response.body);
+      return data['result']['url'];
+    }
+    return "";
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: Text('Sync Files & Folders')),
-      body: Column(
-        children: [
-          Expanded(
-            child: ListView(
+      floatingActionButton: FloatingActionButton(
+        onPressed: _showAddSyncDialog,
+        child: Icon(Icons.add),
+      ),
+      body: ListView.builder(
+        itemCount: syncOrders.length,
+        itemBuilder: (context, index) {
+          SyncOrder order = syncOrders[index];
+          return ListTile(
+            title: Text("${order.localFolder} (${order.syncType})"),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                ListTile(title: Text("Missing Files on Cloud"), subtitle: Text(missingOnCloud.join(", "))),
-                ListTile(title: Text("Missing Files Locally"), subtitle: Text(missingLocally.join(", "))),
-                ListTile(title: Text("Missing Folders on Cloud"), subtitle: Text(missingFoldersOnCloud.join(", "))),
-                ListTile(title: Text("Missing Folders Locally"), subtitle: Text(missingFoldersLocally.join(", "))),
+                ElevatedButton(
+                  onPressed: () {
+                    syncRunning[order] == true ? _stopSync(order) : _startSync(order);
+                  },
+                  child: Text(syncRunning[order] == true ? "Stop" : "Start"),
+                ),
+                IconButton(
+                  icon: Icon(Icons.delete, color: Colors.red),
+                  onPressed: () => _deleteSyncOrder(order),
+                ),
               ],
             ),
-          ),
-          ElevatedButton(
-            onPressed: _compareRepositories,
-            child: Text("Refresh Comparison"),
-          ),
-        ],
+          );
+        },
       ),
     );
   }
@@ -848,5 +984,65 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
         child: Icon(_controller.value.isPlaying ? Icons.pause : Icons.play_arrow),
       ),
     );
+  }
+}
+
+class FileUploader {
+  String? _serverUrl; // Stores the available server URL
+  final String sessionId;
+
+  FileUploader({required this.sessionId}) {
+    _initializeServerUrl();
+  }
+
+  /// Fetch available upload server URL at startup
+  Future<void> _initializeServerUrl() async {
+    try {
+      final response = await http.get(
+        Uri.parse('https://filelu.com/api/upload/server?sess_id=$sessionId'),
+      );
+
+      if (response.statusCode == 200) {
+        var data = jsonDecode(response.body);
+        _serverUrl = data['result'];
+        print("Upload server initialized: $_serverUrl");
+      } else {
+        print("Failed to get upload server: ${response.reasonPhrase}");
+      }
+    } catch (e) {
+      print("Error fetching upload server: $e");
+    }
+  }
+
+  /// Upload file to server
+  Future<void> uploadFile(String filePath) async {
+    if (_serverUrl == null) {
+      await _initializeServerUrl(); // Fetch server URL if not available
+    }
+
+    if (_serverUrl == null) {
+      print("No available upload server. Upload failed.");
+      return;
+    }
+
+    try {
+      var request = http.MultipartRequest('POST', Uri.parse(_serverUrl!));
+      request.fields.addAll({
+        'utype': 'prem',
+        'sess_id': sessionId,
+      });
+
+      request.files.add(await http.MultipartFile.fromPath('file_0', filePath));
+
+      http.StreamedResponse response = await request.send();
+
+      if (response.statusCode == 200) {
+        print("Upload successful: ${await response.stream.bytesToString()}");
+      } else {
+        print("Upload failed: ${response.reasonPhrase}");
+      }
+    } catch (e) {
+      print("Upload error: $e");
+    }
   }
 }
