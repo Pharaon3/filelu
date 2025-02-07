@@ -252,44 +252,63 @@ class _MyFilesPageState extends State<MyFilesPage> {
 
   // Display file/folder list with options
   Widget _buildFileFolderList() {
-    return ListView(
-      children: [
-        if (folders.isNotEmpty || files.isNotEmpty) ...[
-          // Display Folders
-          if (folders.isNotEmpty)
-            ...folders.map((folder) {
-              return FileFolder(
-                name: folder['name'],
-                isFile: false,
-                thumbnail: Icon(Icons.folder, size: 40), // Default icon
-                onOptionsTap: () => _showOptions(context, folder),
-                onOpenFileFolder: () => _openCloudFolder(context, folder),
-              );
-            }).toList(),
-
-          // Display Files
-          if (files.isNotEmpty)
-            ...files.map((file) {
-              return FileFolder(
-                name: file['name'],
-                isFile: true,
-                thumbnail: Image.network(file['thumbnail']),
-                onOptionsTap: () => _showOptions(context, file),
-                onOpenFileFolder: () => openCloudFile(context, file['file_code'], file['name']),
-              );
-            }).toList(),
-        ] else ...[
-          Center(
-            child: Padding(
-              padding: EdgeInsets.all(16.0),
-              child: Text(
-                "This folder is empty",
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-            ),
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('My Files'),
+        leading: IconButton(
+          icon: Icon(Icons.arrow_back),
+          onPressed: () {
+            _backCloudFolder();
+          },
+        ),
+        actions: [
+          IconButton(
+            icon: Icon(Icons.home),
+            onPressed: () {
+              _homeCloudFolder();
+            },
           ),
         ],
-      ],
+      ),
+      body: ListView(
+        children: [
+          if (folders.isNotEmpty || files.isNotEmpty) ...[
+            // Display Folders
+            if (folders.isNotEmpty)
+              ...folders.map((folder) {
+                return FileFolder(
+                  name: folder['name'],
+                  isFile: false,
+                  thumbnail: Icon(Icons.folder, size: 40), // Default icon
+                  onOptionsTap: () => _showOptions(context, folder),
+                  onOpenFileFolder: () => _openCloudFolder(context, folder),
+                );
+              }).toList(),
+
+            // Display Files
+            if (files.isNotEmpty)
+              ...files.map((file) {
+                return FileFolder(
+                  name: file['name'],
+                  isFile: true,
+                  thumbnail: Image.network(file['thumbnail']),
+                  onOptionsTap: () => _showOptions(context, file),
+                  onOpenFileFolder: () => openCloudFile(context, file['file_code'], file['name']),
+                );
+              }).toList(),
+          ] else ...[
+            Center(
+              child: Padding(
+                padding: EdgeInsets.all(16.0),
+                child: Text(
+                  "This folder is empty",
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 
@@ -579,23 +598,6 @@ class _MyFilesPageState extends State<MyFilesPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text('My Files'),
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back),
-          onPressed: () {
-            _backCloudFolder();
-          },
-        ),
-        actions: [
-          IconButton(
-            icon: Icon(Icons.home),
-            onPressed: () {
-              _homeCloudFolder();
-            },
-          ),
-        ],
-      ),
       body: _getPageContent(),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _selectedIndex,
