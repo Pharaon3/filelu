@@ -703,7 +703,7 @@ class SyncPage extends StatefulWidget {
   SyncPage({required this.sessionId});
 
   @override
-  _SyncPageState createState() => _SyncPageState();
+  _SyncPageState createState() => _SyncPageState(sessionId: sessionId);
 }
 
 class SyncOrder {
@@ -718,6 +718,33 @@ class _SyncPageState extends State<SyncPage> {
   List<SyncOrder> syncOrders = [];
   Map<SyncOrder, bool> syncRunning = {};
   String uploadServer = "";
+  final String sessionId;
+
+  _SyncPageState({required this.sessionId});
+
+  @override
+  void initState() {
+    super.initState();
+    _initializeServerUrl();
+  }
+
+  Future<void> _initializeServerUrl() async {
+    try {
+      final response = await http.get(
+        Uri.parse('https://filelu.com/api/upload/server?sess_id=$sessionId'),
+      );
+
+      if (response.statusCode == 200) {
+        var data = jsonDecode(response.body);
+        uploadServer = data['result'];
+        print("Upload server initialized: $uploadServer");
+      } else {
+        print("Failed to get upload server: ${response.reasonPhrase}");
+      }
+    } catch (e) {
+      print("Error fetching upload server: $e");
+    }
+  }
 
   Future<void> _showAddSyncDialog() async {
     String selectedSyncType = "Upload Only";
@@ -860,7 +887,7 @@ class _SyncPageState extends State<SyncPage> {
         String filePath = "$localFolder${Platform.pathSeparator}$file";
         File uploadFile = File(filePath);
         if (uploadFile.existsSync()) {
-          FileUploader uploader = FileUploader(sessionId: widget.sessionId);
+          FileUploader uploader = FileUploader(sessionId: widget.sessionId, serverUrl: uploadServer);
           await uploader.uploadFile(filePath);
         }
       }
@@ -990,45 +1017,22 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
 }
 
 class FileUploader {
-  String? _serverUrl; // Stores the available server URL
+  final String? serverUrl; // Stores the available server URL
   final String sessionId;
 
-  FileUploader({required this.sessionId}) {
-    _initializeServerUrl();
-  }
-
+  FileUploader({required this.sessionId, required this.serverUrl});
   /// Fetch available upload server URL at startup
-  Future<void> _initializeServerUrl() async {
-    try {
-      final response = await http.get(
-        Uri.parse('https://filelu.com/api/upload/server?sess_id=$sessionId'),
-      );
-
-      if (response.statusCode == 200) {
-        var data = jsonDecode(response.body);
-        _serverUrl = data['result'];
-        print("Upload server initialized: $_serverUrl");
-      } else {
-        print("Failed to get upload server: ${response.reasonPhrase}");
-      }
-    } catch (e) {
-      print("Error fetching upload server: $e");
-    }
-  }
+  
 
   /// Upload file to server
   Future<void> uploadFile(String filePath) async {
-    if (_serverUrl == null) {
-      await _initializeServerUrl(); // Fetch server URL if not available
-    }
-
-    if (_serverUrl == null) {
+    if (serverUrl == null) {
       print("No available upload server. Upload failed.");
       return;
     }
 
     try {
-      var request = http.MultipartRequest('POST', Uri.parse(_serverUrl!));
+      var request = http.MultipartRequest('POST', Uri.parse(serverUrl!));
       request.fields.addAll({
         'utype': 'prem',
         'sess_id': sessionId,
