@@ -8,6 +8,7 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:video_player/video_player.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   runApp(MyApp());
@@ -705,18 +706,38 @@ class SyncPage extends StatefulWidget {
   @override
   _SyncPageState createState() => _SyncPageState(sessionId: sessionId);
 }
-
 class SyncOrder {
-  String localFolder;
-  String syncType;
+  String localPath;
+  String syncType; // Upload Only, Download Only, etc.
   bool isRunning;
 
-  SyncOrder({required this.localFolder, required this.syncType, this.isRunning = false});
+  SyncOrder({
+    required this.localPath,
+    required this.syncType,
+    this.isRunning = false,
+  });
+
+  // Convert SyncOrder to JSON
+  Map<String, dynamic> toJson() {
+    return {
+      'localPath': localPath,
+      'syncType': syncType,
+      'isRunning': isRunning,
+    };
+  }
+
+  // Create SyncOrder from JSON
+  factory SyncOrder.fromJson(Map<String, dynamic> json) {
+    return SyncOrder(
+      localPath: json['localPath'],
+      syncType: json['syncType'],
+      isRunning: json['isRunning'] ?? false,
+    );
+  }
 }
 
 class _SyncPageState extends State<SyncPage> {
   List<SyncOrder> syncOrders = [];
-  Map<SyncOrder, bool> syncRunning = {};
   String uploadServer = "";
   final String sessionId;
 
@@ -725,6 +746,7 @@ class _SyncPageState extends State<SyncPage> {
   @override
   void initState() {
     super.initState();
+    _loadSyncOrders(); 
     _initializeServerUrl();
   }
 
@@ -746,8 +768,57 @@ class _SyncPageState extends State<SyncPage> {
     }
   }
 
-  Future<void> _showAddSyncDialog() async {
-    String selectedSyncType = "Upload Only";
+  /// Load sync orders from local storage
+  Future<void> _loadSyncOrders() async {
+    final prefs = await SharedPreferences.getInstance();
+    final String? storedOrders = prefs.getString('sync_orders');
+
+    if (storedOrders != null) {
+      setState(() {
+        List<dynamic> decoded = jsonDecode(storedOrders);
+        syncOrders = decoded.map((e) => SyncOrder.fromJson(e)).toList();
+      });
+    }
+  }
+
+  /// Save sync orders to local storage
+  Future<void> _saveSyncOrders() async {
+    final prefs = await SharedPreferences.getInstance();
+    String encodedOrders = jsonEncode(syncOrders.map((e) => e.toJson()).toList());
+    await prefs.setString('sync_orders', encodedOrders);
+  }
+
+  /// Add new Sync Order
+  void _addSyncOrder(String localPath, String syncType) {
+    setState(() {
+      syncOrders.add(SyncOrder(localPath: localPath, syncType: syncType));
+    });
+    _saveSyncOrders();
+  }
+
+  /// Delete Sync Order
+  void _deleteSyncOrder(int index) {
+    setState(() {
+      syncOrders.removeAt(index);
+    });
+    _saveSyncOrders();
+  }
+
+  /// Start/Stop Sync Order
+  void _toggleSync(int index) async {
+    setState(() {
+      syncOrders[index].isRunning = !syncOrders[index].isRunning;
+    });
+    _saveSyncOrders();
+    if (syncOrders[index].isRunning) {
+      await _performSync(syncOrders[index]);
+      await Future.delayed(Duration(seconds: 10)); // Run every 10 seconds
+    }
+  }
+
+  /// Show Add Sync Order Popup
+  void _showAddSyncOrderDialog() {
+    String selectedType = "Upload Only";
     TextEditingController folderController = TextEditingController();
 
     showDialog(
@@ -758,6 +829,7 @@ class _SyncPageState extends State<SyncPage> {
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              // Folder path input
               TextField(
                 controller: folderController,
                 decoration: InputDecoration(
@@ -775,42 +847,41 @@ class _SyncPageState extends State<SyncPage> {
                 readOnly: true,
               ),
               SizedBox(height: 10),
+              // Sync type dropdown
               DropdownButton<String>(
-                value: selectedSyncType,
-                items: ["Upload Only", "Download Only", "One-Way Sync", "Two-Way Sync"]
-                    .map((type) => DropdownMenuItem(value: type, child: Text(type)))
-                    .toList(),
+                value: selectedType,
                 onChanged: (value) {
-                  setState(() {
-                    selectedSyncType = value!;
-                  });
+                  setState(() => selectedType = value!);
                 },
+                items: [
+                  "Upload Only",
+                  "Download Only",
+                  "One-Way Sync",
+                  "Two-Way Sync"
+                ].map((type) {
+                  return DropdownMenuItem(value: type, child: Text(type));
+                }).toList(),
               ),
             ],
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text("Cancel"),
-            ),
-            ElevatedButton(
               onPressed: () {
-                setState(() {
-                  syncOrders.add(SyncOrder(
-                    localFolder: folderController.text,
-                    syncType: selectedSyncType,
-                  ));
-                });
+                  _addSyncOrder(folderController.text, selectedType);
                 Navigator.pop(context);
               },
               child: Text("Add"),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text("Cancel"),
             ),
           ],
         );
       },
     );
   }
-
+  
   Future<String?> _pickFolder() async {
     String? selectedFolder;
     if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
@@ -821,32 +892,9 @@ class _SyncPageState extends State<SyncPage> {
     return selectedFolder;
   }
 
-  void _startSync(SyncOrder order) async {
-    setState(() {
-      syncRunning[order] = true;
-    });
-
-    while (syncRunning[order] == true) {
-      await _performSync(order);
-      await Future.delayed(Duration(seconds: 10)); // Run every 10 seconds
-    }
-  }
-
-  void _stopSync(SyncOrder order) {
-    setState(() {
-      syncRunning[order] = false;
-    });
-  }
-
-  void _deleteSyncOrder(SyncOrder order) {
-    setState(() {
-      syncOrders.remove(order);
-      syncRunning.remove(order);
-    });
-  }
-
   Future<void> _performSync(SyncOrder order) async {
     List<String> cloudFiles = [];
+    List<String> cloudFileCodes = [];
     List<String> localFiles = [];
 
     final response = await http.get(
@@ -856,35 +904,36 @@ class _SyncPageState extends State<SyncPage> {
     if (response.statusCode == 200) {
       var data = jsonDecode(response.body);
       cloudFiles = List<String>.from(data['result']['files'].map((file) => file['name']));
+      cloudFileCodes = List<String>.from(data['result']['files'].map((file) => file['file_code']));
     }
 
-    Directory dir = Directory(order.localFolder);
+    Directory dir = Directory(order.localPath);
     if (dir.existsSync()) {
       localFiles = dir.listSync().whereType<File>().map((e) => e.path.split(Platform.pathSeparator).last).toList();
     }
 
     switch (order.syncType) {
       case "Upload Only":
-        await _uploadFiles(localFiles, cloudFiles, order.localFolder);
+        await _uploadFiles(localFiles, cloudFiles, order.localPath);
         break;
       case "Download Only":
-        await _downloadFiles(localFiles, cloudFiles, order.localFolder);
+        await _downloadFiles(localFiles, cloudFiles, cloudFileCodes, order.localPath);
         break;
       case "One-Way Sync":
-        await _uploadFiles(localFiles, cloudFiles, order.localFolder);
-        await _deleteCloudExtras(localFiles, cloudFiles);
+        await _uploadFiles(localFiles, cloudFiles, order.localPath);
+        await _deleteCloudExtras(localFiles, cloudFiles, cloudFileCodes);
         break;
       case "Two-Way Sync":
-        await _uploadFiles(localFiles, cloudFiles, order.localFolder);
-        await _downloadFiles(localFiles, cloudFiles, order.localFolder);
+        await _uploadFiles(localFiles, cloudFiles, order.localPath);
+        await _downloadFiles(localFiles, cloudFiles, cloudFileCodes, order.localPath);
         break;
     }
   }
 
-  Future<void> _uploadFiles(List<String> localFiles, List<String> cloudFiles, String localFolder) async {
+  Future<void> _uploadFiles(List<String> localFiles, List<String> cloudFiles, String localPath) async {
     for (String file in localFiles) {
       if (!cloudFiles.contains(file)) {
-        String filePath = "$localFolder${Platform.pathSeparator}$file";
+        String filePath = "$localPath${Platform.pathSeparator}$file";
         File uploadFile = File(filePath);
         if (uploadFile.existsSync()) {
           FileUploader uploader = FileUploader(sessionId: widget.sessionId, serverUrl: uploadServer);
@@ -894,13 +943,14 @@ class _SyncPageState extends State<SyncPage> {
     }
   }
 
-  Future<void> _downloadFiles(List<String> localFiles, List<String> cloudFiles, String localFolder) async {
-    for (String file in cloudFiles) {
+  Future<void> _downloadFiles(List<String> localFiles, List<String> cloudFiles, List<String> cloudFileCodes, String localPath) async {
+    for (int i = 0; i < cloudFiles.length; i++) {
+      String file = cloudFiles[i];
       if (!localFiles.contains(file)) {
-        String downloadLink = await _getDownloadLink(file);
+        String downloadLink = await _getDownloadLink(cloudFileCodes[i]);
         var response = await http.get(Uri.parse(downloadLink));
         if (response.statusCode == 200) {
-          File localFile = File("$localFolder${Platform.pathSeparator}$file");
+          File localFile = File("$localPath${Platform.pathSeparator}$file");
           await localFile.writeAsBytes(response.bodyBytes);
           print("Downloaded: $file");
         }
@@ -908,10 +958,11 @@ class _SyncPageState extends State<SyncPage> {
     }
   }
 
-  Future<void> _deleteCloudExtras(List<String> localFiles, List<String> cloudFiles) async {
-    for (String file in cloudFiles) {
+  Future<void> _deleteCloudExtras(List<String> localFiles, List<String> cloudFiles, List<String> cloudFileCode) async {
+    for (int i = 0; i < cloudFiles.length; i++) {
+      String file = cloudFiles[i];
       if (!localFiles.contains(file)) {
-        await http.get(Uri.parse('https://filelu.com/api/file/delete?file_name=$file&sess_id=${widget.sessionId}'));
+        await http.get(Uri.parse('https://filelu.com/api/file/remove?file_code=${cloudFileCode[i]}&remove=1&sess_id=${widget.sessionId}'));
         print("Deleted from cloud: $file");
       }
     }
@@ -933,32 +984,39 @@ class _SyncPageState extends State<SyncPage> {
     return Scaffold(
       appBar: AppBar(title: Text('Sync Files & Folders')),
       floatingActionButton: FloatingActionButton(
-        onPressed: _showAddSyncDialog,
+        onPressed: _showAddSyncOrderDialog,
         child: Icon(Icons.add),
       ),
-      body: ListView.builder(
-        itemCount: syncOrders.length,
-        itemBuilder: (context, index) {
-          SyncOrder order = syncOrders[index];
-          return ListTile(
-            title: Text("${order.localFolder} (${order.syncType})"),
-            trailing: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                ElevatedButton(
-                  onPressed: () {
-                    syncRunning[order] == true ? _stopSync(order) : _startSync(order);
-                  },
-                  child: Text(syncRunning[order] == true ? "Stop" : "Start"),
-                ),
-                IconButton(
-                  icon: Icon(Icons.delete, color: Colors.red),
-                  onPressed: () => _deleteSyncOrder(order),
-                ),
-              ],
+      body: Column(
+        children: [
+          Expanded(
+            child: ListView.builder(
+              itemCount: syncOrders.length,
+              itemBuilder: (context, index) {
+                final order = syncOrders[index];
+
+                return ListTile(
+                  title: Text("${order.syncType}: ${order.localPath}"),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Start/Stop Button
+                      IconButton(
+                        icon: Icon(order.isRunning ? Icons.pause : Icons.play_arrow),
+                        onPressed: () => _toggleSync(index),
+                      ),
+                      // Delete Button
+                      IconButton(
+                        icon: Icon(Icons.delete),
+                        onPressed: () => _deleteSyncOrder(index),
+                      ),
+                    ],
+                  ),
+                );
+              },
             ),
-          );
-        },
+          ),
+        ],
       ),
     );
   }

@@ -43,6 +43,7 @@ dependencies:
   permission_handler: ^11.3.1
   file_picker: ^8.3.1
   shared_preferences: ^2.5.1
+  json_annotation: ^4.9.0
 
 dev_dependencies:
   flutter_test:
