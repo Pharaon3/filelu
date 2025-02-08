@@ -706,6 +706,7 @@ class SyncPage extends StatefulWidget {
   @override
   _SyncPageState createState() => _SyncPageState(sessionId: sessionId);
 }
+
 class SyncOrder {
   String localPath;
   String syncType; // Upload Only, Download Only, etc.
@@ -738,6 +739,7 @@ class SyncOrder {
 
 class _SyncPageState extends State<SyncPage> {
   List<SyncOrder> syncOrders = [];
+  List<List<String>> syncedFiles = [];
   String uploadServer = "";
   final String sessionId;
 
@@ -772,11 +774,20 @@ class _SyncPageState extends State<SyncPage> {
   Future<void> _loadSyncOrders() async {
     final prefs = await SharedPreferences.getInstance();
     final String? storedOrders = prefs.getString('sync_orders');
+    final String? storedSyncedFiles = prefs.getString('stored_files');
 
     if (storedOrders != null) {
       setState(() {
         List<dynamic> decoded = jsonDecode(storedOrders);
         syncOrders = decoded.map((e) => SyncOrder.fromJson(e)).toList();
+      });
+    }
+
+    if (storedSyncedFiles != null) {
+      setState(() {
+        List<dynamic> decoded = jsonDecode(storedSyncedFiles);
+        syncedFiles = decoded.map((e) => List<String>.from(e)).toList();
+        print(syncedFiles);
       });
     }
   }
@@ -786,6 +797,12 @@ class _SyncPageState extends State<SyncPage> {
     final prefs = await SharedPreferences.getInstance();
     String encodedOrders = jsonEncode(syncOrders.map((e) => e.toJson()).toList());
     await prefs.setString('sync_orders', encodedOrders);
+  }
+
+  Future<void> _saveSyncFiles() async {
+    final prefs = await SharedPreferences.getInstance();
+    String encodedOrders = jsonEncode(syncedFiles);
+    await prefs.setString('stored_files', encodedOrders);
   }
 
   /// Add new Sync Order
@@ -810,7 +827,7 @@ class _SyncPageState extends State<SyncPage> {
       syncOrders[index].isRunning = !syncOrders[index].isRunning;
     });
     _saveSyncOrders();
-    if (syncOrders[index].isRunning) {
+    while (syncOrders[index].isRunning) {
       await _performSync(syncOrders[index]);
       await Future.delayed(Duration(seconds: 10)); // Run every 10 seconds
     }
@@ -924,10 +941,29 @@ class _SyncPageState extends State<SyncPage> {
         await _deleteCloudExtras(localFiles, cloudFiles, cloudFileCodes);
         break;
       case "Two-Way Sync":
-        await _uploadFiles(localFiles, cloudFiles, order.localPath);
-        await _downloadFiles(localFiles, cloudFiles, cloudFileCodes, order.localPath);
+        await _uploadFiles(localFiles, syncedFiles[0], order.localPath);
+        await _downloadFiles(syncedFiles[0], cloudFiles, cloudFileCodes, order.localPath);
+        await _deleteCloudExtras(localFiles, syncedFiles[0], syncedFiles[1]);
+        await _deleteLocalExtras(syncedFiles[0], cloudFiles, order.localPath);
         break;
     }
+
+    // Update synced files.
+    final response1 = await http.get(
+      Uri.parse('https://filelu.com/api/folder/list?fld_id=0&sess_id=${widget.sessionId}'),
+    );
+
+    if (response1.statusCode == 200) {
+      var data = jsonDecode(response1.body);
+      cloudFiles = List<String>.from(data['result']['files'].map((file) => file['name']));
+      cloudFileCodes = List<String>.from(data['result']['files'].map((file) => file['file_code']));
+      setState(() {
+        syncedFiles = [cloudFiles, cloudFileCodes];
+        print(syncedFiles);
+      });
+    }
+
+    _saveSyncFiles();
   }
 
   Future<void> _uploadFiles(List<String> localFiles, List<String> cloudFiles, String localPath) async {
@@ -964,6 +1000,22 @@ class _SyncPageState extends State<SyncPage> {
       if (!localFiles.contains(file)) {
         await http.get(Uri.parse('https://filelu.com/api/file/remove?file_code=${cloudFileCode[i]}&remove=1&sess_id=${widget.sessionId}'));
         print("Deleted from cloud: $file");
+      }
+    }
+  }
+
+  Future<void> _deleteLocalExtras(List<String> localFiles, List<String> cloudFiles, String localPath) async {
+    for (int i = 0; i < localFiles.length; i++) {
+      String file = localFiles[i];
+      if (!cloudFiles.contains(file)) {
+        String filePath = "$localPath${Platform.pathSeparator}$file";
+        final deletefile = File(filePath);
+        if (await deletefile.exists()) {
+          await deletefile.delete();
+          print('File deleted: $filePath');
+        } else {
+          print('File not found: $filePath');
+        }
       }
     }
   }
