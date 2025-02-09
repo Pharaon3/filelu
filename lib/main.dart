@@ -711,11 +711,13 @@ class SyncOrder {
   String localPath;
   String syncType; // Upload Only, Download Only, etc.
   bool isRunning;
+  String remotePath;
 
   SyncOrder({
     required this.localPath,
     required this.syncType,
     this.isRunning = false,
+    required this.remotePath,
   });
 
   // Convert SyncOrder to JSON
@@ -724,6 +726,7 @@ class SyncOrder {
       'localPath': localPath,
       'syncType': syncType,
       'isRunning': isRunning,
+      'remotePath': remotePath,
     };
   }
 
@@ -733,6 +736,7 @@ class SyncOrder {
       localPath: json['localPath'],
       syncType: json['syncType'],
       isRunning: json['isRunning'] ?? false,
+      remotePath: json['remotePath'],
     );
   }
 }
@@ -806,9 +810,9 @@ class _SyncPageState extends State<SyncPage> {
   }
 
   /// Add new Sync Order
-  void _addSyncOrder(String localPath, String syncType) {
+  void _addSyncOrder(String localPath, String syncType, String remotePath) {
     setState(() {
-      syncOrders.add(SyncOrder(localPath: localPath, syncType: syncType));
+      syncOrders.add(SyncOrder(localPath: localPath, syncType: syncType, remotePath: remotePath));
     });
     _saveSyncOrders();
   }
@@ -837,6 +841,7 @@ class _SyncPageState extends State<SyncPage> {
   void _showAddSyncOrderDialog() {
     String selectedType = "Upload Only";
     TextEditingController folderController = TextEditingController();
+    String remotePath = "";
 
     showDialog(
       context: context,
@@ -864,6 +869,11 @@ class _SyncPageState extends State<SyncPage> {
                 readOnly: true,
               ),
               SizedBox(height: 10),
+              TextField(
+                decoration: InputDecoration(labelText: "Remote Folder"),
+                onChanged: (value) => remotePath = value,
+              ),
+              SizedBox(height: 10),
               // Sync type dropdown
               DropdownButton<String>(
                 value: selectedType,
@@ -884,7 +894,7 @@ class _SyncPageState extends State<SyncPage> {
           actions: [
             TextButton(
               onPressed: () {
-                  _addSyncOrder(folderController.text, selectedType);
+                _addSyncOrder(folderController.text, selectedType, remotePath);
                 Navigator.pop(context);
               },
               child: Text("Add"),
@@ -911,7 +921,9 @@ class _SyncPageState extends State<SyncPage> {
 
   Future<void> _performSync(SyncOrder order) async {
     List<String> cloudFiles = [];
+    List<String> cloudFolders = [];
     List<String> cloudFileCodes = [];
+    List<String> cloudFolderCodes = [];
     List<String> localFiles = [];
 
     final response = await http.get(
@@ -922,6 +934,8 @@ class _SyncPageState extends State<SyncPage> {
       var data = jsonDecode(response.body);
       cloudFiles = List<String>.from(data['result']['files'].map((file) => file['name']));
       cloudFileCodes = List<String>.from(data['result']['files'].map((file) => file['file_code']));
+      cloudFolders = List<String>.from(data['result']['folders'].map((file) => file['name']));
+      cloudFolderCodes = List<String>.from(data['result']['folders'].map((file) => file['fld_id']));
     }
 
     Directory dir = Directory(order.localPath);
@@ -1046,12 +1060,15 @@ class _SyncPageState extends State<SyncPage> {
               itemCount: syncOrders.length,
               itemBuilder: (context, index) {
                 final order = syncOrders[index];
-
                 return ListTile(
-                  title: Text("${order.syncType}: ${order.localPath}"),
+                  title: Text(order.syncType),
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      Text(order.localPath),
+                      SizedBox(width: 50),
+                      Text(order.remotePath),
+                      SizedBox(width: 20),
                       // Start/Stop Button
                       IconButton(
                         icon: Icon(order.isRunning ? Icons.pause : Icons.play_arrow),
