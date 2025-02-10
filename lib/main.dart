@@ -712,12 +712,14 @@ class SyncOrder {
   String syncType; // Upload Only, Download Only, etc.
   bool isRunning;
   String remotePath;
+  String fld_id;
 
   SyncOrder({
     required this.localPath,
     required this.syncType,
     this.isRunning = false,
     required this.remotePath,
+    required this.fld_id,
   });
 
   // Convert SyncOrder to JSON
@@ -727,6 +729,7 @@ class SyncOrder {
       'syncType': syncType,
       'isRunning': isRunning,
       'remotePath': remotePath,
+      'fld_id': fld_id,
     };
   }
 
@@ -737,6 +740,7 @@ class SyncOrder {
       syncType: json['syncType'],
       isRunning: json['isRunning'] ?? false,
       remotePath: json['remotePath'],
+      fld_id: json['fld_id'],
     );
   }
 }
@@ -810,9 +814,16 @@ class _SyncPageState extends State<SyncPage> {
   }
 
   /// Add new Sync Order
-  void _addSyncOrder(String localPath, String syncType, String remotePath) {
+  void _addSyncOrder(String localPath, String syncType, String remotePath) async {
+    List<String> remotePathList = remotePath.split("/");
+    String currentRemoteFldID = "0";
+    for (int i = 0; i < remotePathList.length; i ++) {
+      String currentRemotePath = remotePathList[i];
+      currentRemoteFldID = await getFolderID(currentRemotePath, currentRemoteFldID);
+      if (currentRemoteFldID == "") return;
+    }
     setState(() {
-      syncOrders.add(SyncOrder(localPath: localPath, syncType: syncType, remotePath: remotePath));
+      syncOrders.add(SyncOrder(localPath: localPath, syncType: syncType, remotePath: remotePath, fld_id: currentRemoteFldID));
     });
     _saveSyncOrders();
   }
@@ -927,7 +938,7 @@ class _SyncPageState extends State<SyncPage> {
     List<String> localFiles = [];
 
     final response = await http.get(
-      Uri.parse('https://filelu.com/api/folder/list?fld_id=0&sess_id=${widget.sessionId}'),
+      Uri.parse('https://filelu.com/api/folder/list?fld_id=${order.fld_id}&sess_id=${widget.sessionId}'),
     );
 
     if (response.statusCode == 200) {
@@ -935,7 +946,7 @@ class _SyncPageState extends State<SyncPage> {
       cloudFiles = List<String>.from(data['result']['files'].map((file) => file['name']));
       cloudFileCodes = List<String>.from(data['result']['files'].map((file) => file['file_code']));
       cloudFolders = List<String>.from(data['result']['folders'].map((file) => file['name']));
-      cloudFolderCodes = List<String>.from(data['result']['folders'].map((file) => file['fld_id']));
+      cloudFolderCodes = List<String>.from(data['result']['folders'].map((file) => file['fld_id'].toString()));
     }
 
     Directory dir = Directory(order.localPath);
@@ -945,17 +956,17 @@ class _SyncPageState extends State<SyncPage> {
 
     switch (order.syncType) {
       case "Upload Only":
-        await _uploadFiles(localFiles, cloudFiles, order.localPath);
+        await _uploadFiles(order.localPath, order.fld_id);
         break;
       case "Download Only":
         await _downloadFiles(localFiles, cloudFiles, cloudFileCodes, order.localPath);
         break;
       case "One-Way Sync":
-        await _uploadFiles(localFiles, cloudFiles, order.localPath);
+        await _uploadFiles(order.localPath, order.fld_id);
         await _deleteCloudExtras(localFiles, cloudFiles, cloudFileCodes);
         break;
       case "Two-Way Sync":
-        await _uploadFiles(localFiles, syncedFiles[0], order.localPath);
+        await _uploadFiles(order.localPath, order.fld_id);
         await _downloadFiles(syncedFiles[0], cloudFiles, cloudFileCodes, order.localPath);
         await _deleteCloudExtras(localFiles, syncedFiles[0], syncedFiles[1]);
         await _deleteLocalExtras(syncedFiles[0], cloudFiles, order.localPath);
@@ -980,17 +991,57 @@ class _SyncPageState extends State<SyncPage> {
     _saveSyncFiles();
   }
 
-  Future<void> _uploadFiles(List<String> localFiles, List<String> cloudFiles, String localPath) async {
+  Future<void> _uploadFiles(String localPath, String folderID) async {
+    List<String> cloudFiles = [];
+    List<String> cloudFolders = [];
+    List<String> cloudFileCodes = [];
+    List<String> cloudFolderCodes = [];
+    List<String> localFiles = [];
+    List<String> localFolders = [];
+
+    Directory dir = Directory(localPath);
+    if (dir.existsSync()) {
+      localFiles = dir.listSync().whereType<File>().map((e) => e.path.split(Platform.pathSeparator).last).toList();
+      localFolders = dir
+        .listSync()
+        .whereType<Directory>()
+        .map((folder) => folder.path.split(Platform.pathSeparator).last)
+        .toList();
+    }
+    
+    final response = await http.get(
+      Uri.parse('https://filelu.com/api/folder/list?fld_id=$folderID&sess_id=${widget.sessionId}'),
+    );
+
+    if (response.statusCode == 200) {
+      var data = jsonDecode(response.body);
+      cloudFiles = List<String>.from(data['result']['files'].map((file) => file['name']));
+      cloudFileCodes = List<String>.from(data['result']['files'].map((file) => file['file_code']));
+      cloudFolders = List<String>.from(data['result']['folders'].map((file) => file['name']));
+      cloudFolderCodes = List<String>.from(data['result']['folders'].map((file) => file['fld_id'].toString()));
+    }
+
     for (String file in localFiles) {
       if (!cloudFiles.contains(file)) {
         String filePath = "$localPath${Platform.pathSeparator}$file";
         File uploadFile = File(filePath);
         if (uploadFile.existsSync()) {
           FileUploader uploader = FileUploader(sessionId: widget.sessionId, serverUrl: uploadServer);
-          await uploader.uploadFile(filePath);
+          String fileCode = await uploader.uploadFile(filePath);
+          await moveFile(fileCode, folderID);
         }
       }
     }
+
+    for (String localFolder in localFolders) {
+      if (!cloudFolders.contains(localFolder)) {
+        String newFoldeId = await createCloudFolder(localFolder, folderID);
+        _uploadFiles("$localPath/$localFolder", newFoldeId);
+      } else {
+        _uploadFiles("$localPath/$localFolder", cloudFolderCodes[cloudFolders.indexOf(localFolder)]);
+      }
+    }
+
   }
 
   Future<void> _downloadFiles(List<String> localFiles, List<String> cloudFiles, List<String> cloudFileCodes, String localPath) async {
@@ -1045,6 +1096,38 @@ class _SyncPageState extends State<SyncPage> {
     return "";
   }
 
+  Future<String> getFolderID(String folderName, String parentFolderID) async {
+    final response = await http.get(
+      Uri.parse('https://filelu.com/api/folder/list?fld_id=$parentFolderID&sess_id=${widget.sessionId}'),
+    );
+    if (response.statusCode == 200) {
+      var data = jsonDecode(response.body);
+      List<String> cloudFolders = List<String>.from(data['result']['folders'].map((file) => file['name']));
+      List<String> cloudFolderCodes = List<String>.from(data['result']['folders'].map((file) => file['fld_id'].toString()));
+      for (int i = 0; i < cloudFolders.length; i ++) {
+        if (cloudFolders[i] == folderName) {
+          return cloudFolderCodes[i];
+        }
+      }
+    }
+    return "";
+  }
+
+  Future<void> moveFile(String fileCode, String folderID) async {
+    await http.get(Uri.parse('https://filelu.com/api/file/set_folder?file_code=$fileCode&fld_id=$folderID&sess_id=${widget.sessionId}'));
+  }
+
+  Future<String> createCloudFolder(String localFolder, String parentId) async {
+    final response = await http.get(
+      Uri.parse('https://filelu.com/api/folder/create?parent_id=$parentId&name=$localFolder&sess_id=${widget.sessionId}')
+    );
+    if (response.statusCode == 200) {
+      var data = jsonDecode(response.body);
+      return data['result']['fld_id'].toString();
+    }
+    return "";
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -1089,6 +1172,7 @@ class _SyncPageState extends State<SyncPage> {
       ),
     );
   }
+
 }
 
 // Video Player Screen
@@ -1152,10 +1236,10 @@ class FileUploader {
   
 
   /// Upload file to server
-  Future<void> uploadFile(String filePath) async {
+  Future<String> uploadFile(String filePath) async {
     if (serverUrl == null) {
       print("No available upload server. Upload failed.");
-      return;
+      return "";
     }
 
     try {
@@ -1170,12 +1254,16 @@ class FileUploader {
       http.StreamedResponse response = await request.send();
 
       if (response.statusCode == 200) {
-        print("Upload successful: ${await response.stream.bytesToString()}");
+        String responseString = await response.stream.bytesToString();
+        print("Upload successful: $responseString");
+        final List<dynamic> responseData = jsonDecode(responseString);
+        return responseData[0]['file_code'];
       } else {
         print("Upload failed: ${response.reasonPhrase}");
       }
     } catch (e) {
       print("Upload error: $e");
     }
+    return "";
   }
 }
