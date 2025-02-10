@@ -959,7 +959,7 @@ class _SyncPageState extends State<SyncPage> {
         await _uploadFiles(order.localPath, order.fld_id);
         break;
       case "Download Only":
-        await _downloadFiles(localFiles, cloudFiles, cloudFileCodes, order.localPath);
+        await _downloadFiles(order.localPath, order.fld_id);
         break;
       case "One-Way Sync":
         await _uploadFiles(order.localPath, order.fld_id);
@@ -967,7 +967,7 @@ class _SyncPageState extends State<SyncPage> {
         break;
       case "Two-Way Sync":
         await _uploadFiles(order.localPath, order.fld_id);
-        await _downloadFiles(syncedFiles[0], cloudFiles, cloudFileCodes, order.localPath);
+        await _downloadFiles(order.localPath, order.fld_id);
         await _deleteCloudExtras(localFiles, syncedFiles[0], syncedFiles[1]);
         await _deleteLocalExtras(syncedFiles[0], cloudFiles, order.localPath);
         break;
@@ -1044,7 +1044,36 @@ class _SyncPageState extends State<SyncPage> {
 
   }
 
-  Future<void> _downloadFiles(List<String> localFiles, List<String> cloudFiles, List<String> cloudFileCodes, String localPath) async {
+  Future<void> _downloadFiles(String localPath, String folderID) async {
+    List<String> cloudFiles = [];
+    List<String> cloudFolders = [];
+    List<String> cloudFileCodes = [];
+    List<String> cloudFolderCodes = [];
+    List<String> localFiles = [];
+    List<String> localFolders = [];
+
+    Directory dir = Directory(localPath);
+    if (dir.existsSync()) {
+      localFiles = dir.listSync().whereType<File>().map((e) => e.path.split(Platform.pathSeparator).last).toList();
+      localFolders = dir
+        .listSync()
+        .whereType<Directory>()
+        .map((folder) => folder.path.split(Platform.pathSeparator).last)
+        .toList();
+    }
+    
+    final response = await http.get(
+      Uri.parse('https://filelu.com/api/folder/list?fld_id=$folderID&sess_id=${widget.sessionId}'),
+    );
+
+    if (response.statusCode == 200) {
+      var data = jsonDecode(response.body);
+      cloudFiles = List<String>.from(data['result']['files'].map((file) => file['name']));
+      cloudFileCodes = List<String>.from(data['result']['files'].map((file) => file['file_code']));
+      cloudFolders = List<String>.from(data['result']['folders'].map((file) => file['name']));
+      cloudFolderCodes = List<String>.from(data['result']['folders'].map((file) => file['fld_id'].toString()));
+    }
+
     for (int i = 0; i < cloudFiles.length; i++) {
       String file = cloudFiles[i];
       if (!localFiles.contains(file)) {
@@ -1057,6 +1086,14 @@ class _SyncPageState extends State<SyncPage> {
         }
       }
     }
+
+    for (int i = 0; i < cloudFolders.length; i++) {
+      String cloudFolder = cloudFolders[i];
+      String cloudFolderCode = cloudFolderCodes[i];
+      createFolderIfNotExists("$localPath${Platform.pathSeparator}$cloudFolder");
+      _downloadFiles("$localPath${Platform.pathSeparator}$cloudFolder", cloudFolderCode);
+    }
+
   }
 
   Future<void> _deleteCloudExtras(List<String> localFiles, List<String> cloudFiles, List<String> cloudFileCode) async {
@@ -1126,6 +1163,19 @@ class _SyncPageState extends State<SyncPage> {
       return data['result']['fld_id'].toString();
     }
     return "";
+  }
+
+  Future<void> createFolderIfNotExists(String path) async {
+    final directory = Directory(path);
+
+    // Check if the directory exists
+    if (await directory.exists()) {
+      print('Directory already exists: $path');
+    } else {
+      // Create the directory
+      await directory.create(recursive: true);
+      print('Directory created: $path');
+    }
   }
 
   @override
