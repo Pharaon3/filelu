@@ -823,7 +823,7 @@ class _SyncPageState extends State<SyncPage> {
       if (currentRemoteFldID == "") return;
     }
     setState(() {
-      syncOrders.add(SyncOrder(localPath: localPath, syncType: syncType, remotePath: remotePath, fld_id: currentRemoteFldID));
+      syncOrders.add(SyncOrder(localPath: localPath, syncType: syncType, remotePath: remotePath, fld_id: currentRemoteFldID, isRunning: true));
     });
     _saveSyncOrders();
   }
