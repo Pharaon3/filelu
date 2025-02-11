@@ -831,7 +831,8 @@ class _SyncPageState extends State<SyncPage> {
       if (currentRemoteFldID == "") return;
     }
     setState(() {
-      syncOrders.add(SyncOrder(localPath: localPath, syncType: syncType, remotePath: remotePath, fld_id: currentRemoteFldID, isRunning: true));
+      syncOrders.add(SyncOrder(localPath: localPath, syncType: syncType, remotePath: remotePath, fld_id: currentRemoteFldID));
+      _toggleSync(syncOrders.length - 1);
     });
     _saveSyncOrders();
   }
@@ -852,7 +853,7 @@ class _SyncPageState extends State<SyncPage> {
     _saveSyncOrders();
     while (syncOrders[index].isRunning) {
       await _performSync(syncOrders[index]);
-      await Future.delayed(Duration(seconds: 30)); // Run every 30 seconds
+      await Future.delayed(Duration(seconds: 10)); // Run every 10 seconds
     }
   }
 
@@ -932,7 +933,6 @@ class _SyncPageState extends State<SyncPage> {
     );
   }
 
-  
   Future<String?> _pickFolder() async {
     String? selectedFolder;
     if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
@@ -944,6 +944,8 @@ class _SyncPageState extends State<SyncPage> {
   }
 
   Future<void> _performSync(SyncOrder order) async {
+    print("perform orders");
+    print(order);
     switch (order.syncType) {
       case "Upload Only":
         await _uploadFiles(order.localPath, order.fld_id);
@@ -1132,6 +1134,9 @@ class _SyncPageState extends State<SyncPage> {
   }
 
   Future<void> _twowaySync(String localPath, String folderID, dynamic folderData) async {
+    print("two way sync");
+    print(localPath);
+    print(folderID);
     List<String> cloudFiles = [];
     List<String> cloudFolders = [];
     List<String> cloudFileCodes = [];
@@ -1233,8 +1238,8 @@ class _SyncPageState extends State<SyncPage> {
       String folder = cloudFolders[i];
       String folderCode = cloudFolderCodes[i];
       if (!syncFolderNames.contains(folder)) {
-        createFolderIfNotExists("$localPath${Platform.pathSeparator}$folder");
-        _downloadFiles("$localPath${Platform.pathSeparator}$folder", folderCode);
+        await createFolderIfNotExists("$localPath${Platform.pathSeparator}$folder");
+        await _downloadFiles("$localPath${Platform.pathSeparator}$folder", folderCode);
       }
     }
 
@@ -1242,9 +1247,9 @@ class _SyncPageState extends State<SyncPage> {
       if (!syncFolderNames.contains(folder)) {
         if (!cloudFolders.contains(folder)) {
           String newFoldeId = await createCloudFolder(folder, folderID);
-          _uploadFiles("$localPath/$folder", newFoldeId);
+          await _uploadFiles("$localPath/$folder", newFoldeId);
         } else {
-          _uploadFiles("$localPath/$folder", cloudFolderCodes[cloudFolders.indexOf(folder)]);
+          await _uploadFiles("$localPath/$folder", cloudFolderCodes[cloudFolders.indexOf(folder)]);
         }
       }
     }
@@ -1252,18 +1257,17 @@ class _SyncPageState extends State<SyncPage> {
     for (int i = 0; i < syncFolderNames.length; i ++) {
       String folder = syncFolderNames[i];
       if (!localFolders.contains(folder)) {
-        _deleteCloudFolder(syncFolderCodes[i]);
+        await _deleteCloudFolder(syncFolderCodes[i]);
       } else if (!cloudFolders.contains(folder)) {
-        _deleteLocalFolder("$localPath/$folder");
+        await _deleteLocalFolder("$localPath/$folder");
       } else {
-        _twowaySync("$localPath/$folder", syncFolderCodes[i], syncFolderDatas[i]);
+        await _twowaySync("$localPath/$folder", syncFolderCodes[i], syncFolderDatas[i]);
       }
     }
 
   }
 
   Future<dynamic> _scanCloudFiles(String folderName, String fldID) async {
-
     dynamic scanedData = {};
     // Update synced files.
     final response = await http.get(
@@ -1312,7 +1316,7 @@ class _SyncPageState extends State<SyncPage> {
     return null; // Return null if not found
   }
 
-  void _deleteLocalFolder(String folderPath) {
+  Future<void> _deleteLocalFolder(String folderPath) async {
       // Create a Directory object
     var directory = Directory(folderPath);
 
@@ -1326,7 +1330,7 @@ class _SyncPageState extends State<SyncPage> {
     }
   }
 
-  void _deleteCloudFolder(String folderID) async {
+  Future<void> _deleteCloudFolder(String folderID) async {
     final response = await http.get(
       Uri.parse('https://filelu.com/api/folder/delete?fld_id=$folderID&sess_id=${widget.sessionId}'),
     );
@@ -1413,7 +1417,7 @@ class _SyncPageState extends State<SyncPage> {
                     children: [
                       Text(order.localPath),
                       SizedBox(width: 50),
-                      Text(order.remotePath),
+                      Text("/${order.remotePath}"),
                       SizedBox(width: 20),
                       // Start/Stop Button
                       IconButton(
