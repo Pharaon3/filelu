@@ -749,6 +749,7 @@ class _SyncPageState extends State<SyncPage> {
   List<SyncOrder> syncOrders = [];
   List<List<String>> syncedFiles = [];
   String uploadServer = "";
+  dynamic syncedFileFolders = {};
   final String sessionId;
 
   _SyncPageState({required this.sessionId});
@@ -783,6 +784,7 @@ class _SyncPageState extends State<SyncPage> {
     final prefs = await SharedPreferences.getInstance();
     final String? storedOrders = prefs.getString('sync_orders');
     final String? storedSyncedFiles = prefs.getString('stored_files');
+    final dynamic? storedSyncedFileFolders = prefs.getString('scanned_data');
 
     if (storedOrders != null) {
       setState(() {
@@ -795,7 +797,12 @@ class _SyncPageState extends State<SyncPage> {
       setState(() {
         List<dynamic> decoded = jsonDecode(storedSyncedFiles);
         syncedFiles = decoded.map((e) => List<String>.from(e)).toList();
-        print(syncedFiles);
+      });
+    }
+
+    if (storedSyncedFileFolders != null) {
+      setState(() {
+        syncedFileFolders = jsonDecode(storedSyncedFileFolders);
       });
     }
   }
@@ -813,12 +820,19 @@ class _SyncPageState extends State<SyncPage> {
     await prefs.setString('stored_files', encodedOrders);
   }
 
+  Future<void> _saveGlobal(key, value) async {
+    final prefs = await SharedPreferences.getInstance();
+    String encodedOrders = jsonEncode(value);
+    await prefs.setString(key, encodedOrders);
+  }
+
   /// Add new Sync Order
   void _addSyncOrder(String localPath, String syncType, String remotePath) async {
     List<String> remotePathList = remotePath.split("/");
     String currentRemoteFldID = "0";
     for (int i = 0; i < remotePathList.length; i ++) {
       String currentRemotePath = remotePathList[i];
+      if (currentRemotePath == "") break;
       currentRemoteFldID = await getFolderID(currentRemotePath, currentRemoteFldID);
       if (currentRemoteFldID == "") return;
     }
@@ -844,7 +858,7 @@ class _SyncPageState extends State<SyncPage> {
     _saveSyncOrders();
     while (syncOrders[index].isRunning) {
       await _performSync(syncOrders[index]);
-      await Future.delayed(Duration(seconds: 10)); // Run every 10 seconds
+      await Future.delayed(Duration(seconds: 30)); // Run every 30 seconds
     }
   }
 
@@ -931,29 +945,6 @@ class _SyncPageState extends State<SyncPage> {
   }
 
   Future<void> _performSync(SyncOrder order) async {
-    List<String> cloudFiles = [];
-    List<String> cloudFolders = [];
-    List<String> cloudFileCodes = [];
-    List<String> cloudFolderCodes = [];
-    List<String> localFiles = [];
-
-    final response = await http.get(
-      Uri.parse('https://filelu.com/api/folder/list?fld_id=${order.fld_id}&sess_id=${widget.sessionId}'),
-    );
-
-    if (response.statusCode == 200) {
-      var data = jsonDecode(response.body);
-      cloudFiles = List<String>.from(data['result']['files'].map((file) => file['name']));
-      cloudFileCodes = List<String>.from(data['result']['files'].map((file) => file['file_code']));
-      cloudFolders = List<String>.from(data['result']['folders'].map((file) => file['name']));
-      cloudFolderCodes = List<String>.from(data['result']['folders'].map((file) => file['fld_id'].toString()));
-    }
-
-    Directory dir = Directory(order.localPath);
-    if (dir.existsSync()) {
-      localFiles = dir.listSync().whereType<File>().map((e) => e.path.split(Platform.pathSeparator).last).toList();
-    }
-
     switch (order.syncType) {
       case "Upload Only":
         await _uploadFiles(order.localPath, order.fld_id);
@@ -965,29 +956,14 @@ class _SyncPageState extends State<SyncPage> {
         await _onewaySync(order.localPath, order.fld_id);
         break;
       case "Two-Way Sync":
-        await _uploadFiles(order.localPath, order.fld_id);
-        await _downloadFiles(order.localPath, order.fld_id);
-        await _deleteCloudExtras(localFiles, syncedFiles[0], syncedFiles[1]);
-        await _deleteLocalExtras(syncedFiles[0], cloudFiles, order.localPath);
+        await _twowaySync(order.localPath, order.fld_id, _findFolderData(syncedFileFolders, order.fld_id));
         break;
     }
 
-    // Update synced files.
-    final response1 = await http.get(
-      Uri.parse('https://filelu.com/api/folder/list?fld_id=0&sess_id=${widget.sessionId}'),
-    );
+    dynamic scanedData = await _scanCloudFiles("", "0");
+    syncedFileFolders = scanedData;
+    _saveGlobal('scaned_data', scanedData);
 
-    if (response1.statusCode == 200) {
-      var data = jsonDecode(response1.body);
-      cloudFiles = List<String>.from(data['result']['files'].map((file) => file['name']));
-      cloudFileCodes = List<String>.from(data['result']['files'].map((file) => file['file_code']));
-      setState(() {
-        syncedFiles = [cloudFiles, cloudFileCodes];
-        print(syncedFiles);
-      });
-    }
-
-    _saveSyncFiles();
   }
 
   Future<void> _uploadFiles(String localPath, String folderID) async {
@@ -1156,17 +1132,207 @@ class _SyncPageState extends State<SyncPage> {
 
   }
 
-  Future<void> _deleteCloudExtras(List<String> localFiles, List<String> cloudFiles, List<String> cloudFileCode) async {
+  Future<void> _twowaySync(String localPath, String folderID, dynamic folderData) async {
+    List<String> cloudFiles = [];
+    List<String> cloudFolders = [];
+    List<String> cloudFileCodes = [];
+    List<String> cloudFolderCodes = [];
+    List<String> localFiles = [];
+    List<String> localFolders = [];
+    List<String> syncFiles = [];
+    List<dynamic> syncFolders = [];
+    List<String> syncFileCodes = [];
+    List<String> syncFolderCodes = [];
+
+    if (folderData.containsKey('file')) syncFiles = folderData['file'].keys.toList();
+    if (folderData.containsKey('file')) syncFileCodes = folderData['file'].values.toList();
+    if (folderData.containsKey('folder')) syncFolders = folderData['folder'];
+
+    if (!folderData.containsKey('file') && !folderData.containsKey('folder')) {
+      _uploadFiles(localPath, folderID);
+      _downloadFiles(localPath, folderID);
+      return;
+    }
+
+    List<String> syncFolderNames = syncFolders.map((folder) => folder['folder_name'] as String).toList();
+    syncFolderCodes = syncFolders.map((folder) => folder['folder_id'] as String).toList();
+    List<dynamic> syncFolderDatas = syncFolders.map((folder) => folder['folder_data'] as dynamic).toList();
+
+    Directory dir = Directory(localPath);
+    if (dir.existsSync()) {
+      localFiles = dir.listSync().whereType<File>().map((e) => e.path.split(Platform.pathSeparator).last).toList();
+      localFolders = dir
+        .listSync()
+        .whereType<Directory>()
+        .map((folder) => folder.path.split(Platform.pathSeparator).last)
+        .toList();
+    }
+
+    final response = await http.get(
+      Uri.parse('https://filelu.com/api/folder/list?fld_id=$folderID&sess_id=${widget.sessionId}'),
+    );
+
+    if (response.statusCode == 200) {
+      var data = jsonDecode(response.body);
+      cloudFiles = List<String>.from(data['result']['files'].map((file) => file['name']));
+      cloudFileCodes = List<String>.from(data['result']['files'].map((file) => file['file_code']));
+      cloudFolders = List<String>.from(data['result']['folders'].map((file) => file['name']));
+      cloudFolderCodes = List<String>.from(data['result']['folders'].map((file) => file['fld_id'].toString()));
+    }
+
+    for (int i = 0; i < cloudFiles.length; i ++) {
+      String file = cloudFiles[i];
+      if (!syncFiles.contains(file)) {
+        String downloadLink = await _getDownloadLink(cloudFileCodes[i]);
+        var responseDownload = await http.get(Uri.parse(downloadLink));
+        if (responseDownload.statusCode == 200) {
+          File localFile = File("$localPath${Platform.pathSeparator}$file");
+          await localFile.writeAsBytes(responseDownload.bodyBytes);
+          print("Downloaded: $file");
+        }
+      }
+    }
+
+    for (String file in localFiles) {
+      if (!syncFiles.contains(file)) {
+        String filePath = "$localPath${Platform.pathSeparator}$file";
+        File uploadFile = File(filePath);
+        if (uploadFile.existsSync()) {
+          FileUploader uploader = FileUploader(sessionId: widget.sessionId, serverUrl: uploadServer);
+          String fileCode = await uploader.uploadFile(filePath);
+          await moveFile(fileCode, folderID);
+        }
+      }
+    }
+
+    for (int i = 0; i < syncFiles.length; i ++) {
+      String file = syncFiles[i];
+      if(!localFiles.contains(file)) {
+        String fileToDeleteCode = syncFileCodes[i];
+        await http.get(Uri.parse('https://filelu.com/api/file/remove?file_code=$fileToDeleteCode&remove=1&sess_id=${widget.sessionId}'));
+        print("Deleted from cloud: $file");
+      }
+      if(!cloudFiles.contains(file)) {
+        String filePath = "$localPath${Platform.pathSeparator}$file";
+        final deletefile = File(filePath);
+        if (await deletefile.exists()) {
+          await deletefile.delete();
+          print('File deleted: $filePath');
+        } else {
+          print('File not found: $filePath');
+        }
+      }
+    }
+
+    for (int i = 0; i < cloudFolders.length; i ++) {
+      String folder = cloudFolders[i];
+      String folderCode = cloudFolderCodes[i];
+      if (!syncFolderNames.contains(folder)) {
+        createFolderIfNotExists("$localPath${Platform.pathSeparator}$folder");
+        _downloadFiles("$localPath${Platform.pathSeparator}$folder", folderCode);
+      }
+    }
+
+    for (String folder in localFolders) {
+      if (!syncFolderNames.contains(folder)) {
+        if (!cloudFolders.contains(folder)) {
+          String newFoldeId = await createCloudFolder(folder, folderID);
+          _uploadFiles("$localPath/$folder", newFoldeId);
+        } else {
+          _uploadFiles("$localPath/$folder", cloudFolderCodes[cloudFolders.indexOf(folder)]);
+        }
+      }
+    }
+
+    for (int i = 0; i < syncFolderNames.length; i ++) {
+      String folder = syncFolderNames[i];
+      if (!localFolders.contains(folder)) {
+        _deleteCloudFolder(syncFolderCodes[i]);
+      } else if (!cloudFolders.contains(folder)) {
+        _deleteLocalFolder("$localPath/$folder");
+      } else {
+        _twowaySync("$localPath/$folder", syncFolderCodes[i], syncFolderDatas[i]);
+      }
+    }
+
+  }
+
+  Future<void> _deleteCloudExtras(String localPath, String folderID, dynamic folderData) async {
+    List<String> cloudFiles = [];
+    List<dynamic> cloudFolders = [];
+    List<String> cloudFileCodes = [];
+    List<String> cloudFolderCodes = [];
+    List<String> localFiles = [];
+    List<String> localFolders = [];
+
+    cloudFiles = folderData['file'].keys.toList();
+    cloudFileCodes = folderData['file'].values.toList();
+    cloudFolders = folderData['folder'];
+
+    Directory dir = Directory(localPath);
+    if (dir.existsSync()) {
+      localFiles = dir.listSync().whereType<File>().map((e) => e.path.split(Platform.pathSeparator).last).toList();
+      localFolders = dir
+        .listSync()
+        .whereType<Directory>()
+        .map((folder) => folder.path.split(Platform.pathSeparator).last)
+        .toList();
+    }
+
+    for (dynamic cloudFolder in cloudFolders) {
+      String cloudFolderName = cloudFolder['folder_name'];
+      String cloudFolderID = cloudFolder['folder_id'];
+      dynamic cloudFolderData = cloudFolder['folder_data'];
+      String newLocalPath = "$localPath/$cloudFolderName";
+      _deleteCloudExtras(newLocalPath, cloudFolderID, cloudFolderData);
+    }
+
     for (int i = 0; i < cloudFiles.length; i++) {
       String file = cloudFiles[i];
       if (!localFiles.contains(file)) {
-        await http.get(Uri.parse('https://filelu.com/api/file/remove?file_code=${cloudFileCode[i]}&remove=1&sess_id=${widget.sessionId}'));
+        await http.get(Uri.parse('https://filelu.com/api/file/remove?file_code=${cloudFileCodes[i]}&remove=1&sess_id=${widget.sessionId}'));
         print("Deleted from cloud: $file");
       }
     }
+
   }
 
-  Future<void> _deleteLocalExtras(List<String> localFiles, List<String> cloudFiles, String localPath) async {
+  Future<void> _deleteLocalExtras(String localPath, String folderID, dynamic folderData) async {
+    List<String> cloudFiles = [];
+    List<dynamic> cloudFolders = [];
+    List<String> cloudFileCodes = [];
+    List<String> cloudFolderCodes = [];
+    List<String> localFiles = [];
+    List<String> localFolders = [];
+
+    cloudFiles = folderData['file'].keys.toList();
+    cloudFileCodes = folderData['file'].values.toList();
+    cloudFolders = folderData['folder'];
+    List<String> cloudFolderNames = cloudFolders.map((folder) => folder['folder_name'] as String).toList();
+
+    Directory dir = Directory(localPath);
+    if (dir.existsSync()) {
+      localFiles = dir.listSync().whereType<File>().map((e) => e.path.split(Platform.pathSeparator).last).toList();
+      localFolders = dir
+        .listSync()
+        .whereType<Directory>()
+        .map((folder) => folder.path.split(Platform.pathSeparator).last)
+        .toList();
+    }
+
+    for (dynamic localFolder in localFolders) {
+      if (!cloudFolderNames.contains(localFolder)) {
+        _deleteLocalFolder("$localPath/$localFolder");
+      } else {
+        dynamic cloudFolder = cloudFolders[cloudFolderNames.indexOf(localFolder)];
+        String cloudFolderName = cloudFolder['folder_name'];
+        String cloudFolderID = cloudFolder['folder_id'];
+        dynamic cloudFolderData = cloudFolder['folder_data'];
+        String newLocalPath = "$localPath/$cloudFolderName";
+        _deleteLocalExtras(newLocalPath, cloudFolderID, cloudFolderData);
+      }
+    }
+
     for (int i = 0; i < localFiles.length; i++) {
       String file = localFiles[i];
       if (!cloudFiles.contains(file)) {
@@ -1179,6 +1345,80 @@ class _SyncPageState extends State<SyncPage> {
           print('File not found: $filePath');
         }
       }
+    }
+  }
+
+  Future<dynamic> _scanCloudFiles(String folderName, String fldID) async {
+
+    dynamic scanedData = {};
+    // Update synced files.
+    final response = await http.get(
+      Uri.parse('https://filelu.com/api/folder/list?fld_id=$fldID&sess_id=${widget.sessionId}'),
+    );
+
+    if (response.statusCode == 200) {
+      var data = jsonDecode(response.body);
+      List<String> cloudFiles = List<String>.from(data['result']['files'].map((file) => file['name']));
+      List<String> cloudFileCodes = List<String>.from(data['result']['files'].map((file) => file['file_code'].toString()));
+      List<String> cloudFolders = List<String>.from(data['result']['folders'].map((file) => file['name']));
+      List<String> cloudFolderIDs = List<String>.from(data['result']['folders'].map((file) => file['fld_id'].toString()));
+      scanedData['file'] = cloudFiles.asMap().map((i, f) => MapEntry(f, cloudFileCodes[i]));
+      scanedData['folder'] = [];
+      for (int i = 0; i < cloudFolders.length; i ++) {
+        String cloudFolder = cloudFolders[i];
+        String cloudFolderID = cloudFolderIDs[i];
+        dynamic cloudFolderData = await _scanCloudFiles(cloudFolder, cloudFolderID);
+        scanedData['folder'].add(cloudFolderData);
+      }
+    }
+    return {"folder_name": folderName, "folder_id": fldID, "folder_data": scanedData};
+
+  }
+
+dynamic _findFolderData(dynamic fileFolder, String fldID) {
+  // Check if fileFolder is empty
+  if (fileFolder.isEmpty) return null; // Changed to return null for easier checks
+
+  // Check if the current folder matches the fldID
+  if (fileFolder['folder_id'] == fldID) return fileFolder['folder_data'];
+
+  // Check if folder_data exists and is a map
+  if (!fileFolder.containsKey('folder_data') || 
+      fileFolder['folder_data'] is! Map) return null;
+
+  // Iterate over the list of folders in folder_data
+  var folders = fileFolder['folder_data']['folder'];
+  if (folders is! List) return null; // Ensure it's a list
+
+  for (dynamic newFileFolder in folders) {
+    dynamic tmpFolderData = _findFolderData(newFileFolder, fldID);
+    if (tmpFolderData != null) return tmpFolderData; // Check against null
+  }
+
+  return null; // Return null if not found
+}
+
+
+  void _deleteLocalFolder(String folderPath) {
+      // Create a Directory object
+    var directory = Directory(folderPath);
+
+    // Check if the directory exists
+    if (directory.existsSync()) {
+      // Delete the directory
+      directory.deleteSync(recursive: true);
+      print('Folder deleted successfully.');
+    } else {
+      print('Folder does not exist.');
+    }
+  }
+
+  void _deleteCloudFolder(String folderID) async {
+    final response = await http.get(
+      Uri.parse('https://filelu.com/api/folder/delete?fld_id=$folderID&sess_id=${widget.sessionId}'),
+    );
+    if (response.statusCode == 200) {
+      print("Successfully delete cloud folder $folderID.");
     }
   }
 
