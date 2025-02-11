@@ -786,21 +786,21 @@ class _SyncPageState extends State<SyncPage> {
     final String? storedSyncedFiles = prefs.getString('stored_files');
     final dynamic? storedSyncedFileFolders = prefs.getString('scanned_data');
 
-    if (storedOrders != null) {
+    if (storedOrders != null && storedOrders != "" && storedOrders != {}) {
       setState(() {
         List<dynamic> decoded = jsonDecode(storedOrders);
         syncOrders = decoded.map((e) => SyncOrder.fromJson(e)).toList();
       });
     }
 
-    if (storedSyncedFiles != null) {
+    if (storedSyncedFiles != null && storedSyncedFiles != "" && storedSyncedFiles != {}) {
       setState(() {
         List<dynamic> decoded = jsonDecode(storedSyncedFiles);
         syncedFiles = decoded.map((e) => List<String>.from(e)).toList();
       });
     }
 
-    if (storedSyncedFileFolders != null) {
+    if (storedSyncedFileFolders != null && storedSyncedFileFolders != "" && storedSyncedFileFolders != {}) {
       setState(() {
         syncedFileFolders = jsonDecode(storedSyncedFileFolders);
       });
@@ -812,12 +812,6 @@ class _SyncPageState extends State<SyncPage> {
     final prefs = await SharedPreferences.getInstance();
     String encodedOrders = jsonEncode(syncOrders.map((e) => e.toJson()).toList());
     await prefs.setString('sync_orders', encodedOrders);
-  }
-
-  Future<void> _saveSyncFiles() async {
-    final prefs = await SharedPreferences.getInstance();
-    String encodedOrders = jsonEncode(syncedFiles);
-    await prefs.setString('stored_files', encodedOrders);
   }
 
   Future<void> _saveGlobal(key, value) async {
@@ -871,68 +865,73 @@ class _SyncPageState extends State<SyncPage> {
     showDialog(
       context: context,
       builder: (context) {
-        return AlertDialog(
-          title: Text("Add Sync Order"),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Folder path input
-              TextField(
-                controller: folderController,
-                decoration: InputDecoration(
-                  labelText: "Local Folder Path",
-                  suffixIcon: IconButton(
-                    icon: Icon(Icons.folder),
-                    onPressed: () async {
-                      String? selectedFolder = await _pickFolder();
-                      if (selectedFolder != null) {
-                        folderController.text = selectedFolder;
-                      }
-                    },
+        return StatefulBuilder(
+          builder: (context, setState) { // Add StatefulBuilder here
+            return AlertDialog(
+              title: Text("Add Sync Order"),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Folder path input
+                  TextField(
+                    controller: folderController,
+                    decoration: InputDecoration(
+                      labelText: "Local Folder Path",
+                      suffixIcon: IconButton(
+                        icon: Icon(Icons.folder),
+                        onPressed: () async {
+                          String? selectedFolder = await _pickFolder();
+                          if (selectedFolder != null) {
+                            folderController.text = selectedFolder;
+                          }
+                        },
+                      ),
+                    ),
+                    readOnly: true,
                   ),
+                  SizedBox(height: 10),
+                  TextField(
+                    decoration: InputDecoration(labelText: "Remote Folder"),
+                    onChanged: (value) => remotePath = value,
+                  ),
+                  SizedBox(height: 10),
+                  // Sync type dropdown
+                  DropdownButton<String>(
+                    value: selectedType,
+                    onChanged: (value) {
+                      setState(() => selectedType = value!); // Use local setState
+                    },
+                    items: [
+                      "Upload Only",
+                      "Download Only",
+                      "One-Way Sync",
+                      "Two-Way Sync"
+                    ].map((type) {
+                      return DropdownMenuItem(value: type, child: Text(type));
+                    }).toList(),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    _addSyncOrder(folderController.text, selectedType, remotePath);
+                    Navigator.pop(context);
+                  },
+                  child: Text("Add"),
                 ),
-                readOnly: true,
-              ),
-              SizedBox(height: 10),
-              TextField(
-                decoration: InputDecoration(labelText: "Remote Folder"),
-                onChanged: (value) => remotePath = value,
-              ),
-              SizedBox(height: 10),
-              // Sync type dropdown
-              DropdownButton<String>(
-                value: selectedType,
-                onChanged: (value) {
-                  setState(() => selectedType = value!);
-                },
-                items: [
-                  "Upload Only",
-                  "Download Only",
-                  "One-Way Sync",
-                  "Two-Way Sync"
-                ].map((type) {
-                  return DropdownMenuItem(value: type, child: Text(type));
-                }).toList(),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                _addSyncOrder(folderController.text, selectedType, remotePath);
-                Navigator.pop(context);
-              },
-              child: Text("Add"),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text("Cancel"),
-            ),
-          ],
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: Text("Cancel"),
+                ),
+              ],
+            );
+          },
         );
       },
     );
   }
+
   
   Future<String?> _pickFolder() async {
     String? selectedFolder;
@@ -1144,15 +1143,21 @@ class _SyncPageState extends State<SyncPage> {
     List<String> syncFileCodes = [];
     List<String> syncFolderCodes = [];
 
-    if (folderData.containsKey('file')) syncFiles = folderData['file'].keys.toList();
-    if (folderData.containsKey('file')) syncFileCodes = folderData['file'].values.toList();
-    if (folderData.containsKey('folder')) syncFolders = folderData['folder'];
+    if (folderData == {} || folderData == null || folderData == "") {
+      _uploadFiles(localPath, folderID);
+      _downloadFiles(localPath, folderID);
+      return;
+    }
 
     if (!folderData.containsKey('file') && !folderData.containsKey('folder')) {
       _uploadFiles(localPath, folderID);
       _downloadFiles(localPath, folderID);
       return;
     }
+
+    if (folderData.containsKey('file')) syncFiles = folderData['file'].keys.toList();
+    if (folderData.containsKey('file')) syncFileCodes = folderData['file'].values.toList();
+    if (folderData.containsKey('folder')) syncFolders = folderData['folder'];
 
     List<String> syncFolderNames = syncFolders.map((folder) => folder['folder_name'] as String).toList();
     syncFolderCodes = syncFolders.map((folder) => folder['folder_id'] as String).toList();
@@ -1257,97 +1262,6 @@ class _SyncPageState extends State<SyncPage> {
 
   }
 
-  Future<void> _deleteCloudExtras(String localPath, String folderID, dynamic folderData) async {
-    List<String> cloudFiles = [];
-    List<dynamic> cloudFolders = [];
-    List<String> cloudFileCodes = [];
-    List<String> cloudFolderCodes = [];
-    List<String> localFiles = [];
-    List<String> localFolders = [];
-
-    cloudFiles = folderData['file'].keys.toList();
-    cloudFileCodes = folderData['file'].values.toList();
-    cloudFolders = folderData['folder'];
-
-    Directory dir = Directory(localPath);
-    if (dir.existsSync()) {
-      localFiles = dir.listSync().whereType<File>().map((e) => e.path.split(Platform.pathSeparator).last).toList();
-      localFolders = dir
-        .listSync()
-        .whereType<Directory>()
-        .map((folder) => folder.path.split(Platform.pathSeparator).last)
-        .toList();
-    }
-
-    for (dynamic cloudFolder in cloudFolders) {
-      String cloudFolderName = cloudFolder['folder_name'];
-      String cloudFolderID = cloudFolder['folder_id'];
-      dynamic cloudFolderData = cloudFolder['folder_data'];
-      String newLocalPath = "$localPath/$cloudFolderName";
-      _deleteCloudExtras(newLocalPath, cloudFolderID, cloudFolderData);
-    }
-
-    for (int i = 0; i < cloudFiles.length; i++) {
-      String file = cloudFiles[i];
-      if (!localFiles.contains(file)) {
-        await http.get(Uri.parse('https://filelu.com/api/file/remove?file_code=${cloudFileCodes[i]}&remove=1&sess_id=${widget.sessionId}'));
-        print("Deleted from cloud: $file");
-      }
-    }
-
-  }
-
-  Future<void> _deleteLocalExtras(String localPath, String folderID, dynamic folderData) async {
-    List<String> cloudFiles = [];
-    List<dynamic> cloudFolders = [];
-    List<String> cloudFileCodes = [];
-    List<String> cloudFolderCodes = [];
-    List<String> localFiles = [];
-    List<String> localFolders = [];
-
-    cloudFiles = folderData['file'].keys.toList();
-    cloudFileCodes = folderData['file'].values.toList();
-    cloudFolders = folderData['folder'];
-    List<String> cloudFolderNames = cloudFolders.map((folder) => folder['folder_name'] as String).toList();
-
-    Directory dir = Directory(localPath);
-    if (dir.existsSync()) {
-      localFiles = dir.listSync().whereType<File>().map((e) => e.path.split(Platform.pathSeparator).last).toList();
-      localFolders = dir
-        .listSync()
-        .whereType<Directory>()
-        .map((folder) => folder.path.split(Platform.pathSeparator).last)
-        .toList();
-    }
-
-    for (dynamic localFolder in localFolders) {
-      if (!cloudFolderNames.contains(localFolder)) {
-        _deleteLocalFolder("$localPath/$localFolder");
-      } else {
-        dynamic cloudFolder = cloudFolders[cloudFolderNames.indexOf(localFolder)];
-        String cloudFolderName = cloudFolder['folder_name'];
-        String cloudFolderID = cloudFolder['folder_id'];
-        dynamic cloudFolderData = cloudFolder['folder_data'];
-        String newLocalPath = "$localPath/$cloudFolderName";
-        _deleteLocalExtras(newLocalPath, cloudFolderID, cloudFolderData);
-      }
-    }
-
-    for (int i = 0; i < localFiles.length; i++) {
-      String file = localFiles[i];
-      if (!cloudFiles.contains(file)) {
-        String filePath = "$localPath${Platform.pathSeparator}$file";
-        final deletefile = File(filePath);
-        if (await deletefile.exists()) {
-          await deletefile.delete();
-          print('File deleted: $filePath');
-        } else {
-          print('File not found: $filePath');
-        }
-      }
-    }
-  }
-
   Future<dynamic> _scanCloudFiles(String folderName, String fldID) async {
 
     dynamic scanedData = {};
@@ -1375,29 +1289,28 @@ class _SyncPageState extends State<SyncPage> {
 
   }
 
-dynamic _findFolderData(dynamic fileFolder, String fldID) {
-  // Check if fileFolder is empty
-  if (fileFolder.isEmpty) return null; // Changed to return null for easier checks
+  dynamic _findFolderData(dynamic fileFolder, String fldID) {
+    // Check if fileFolder is empty
+    if (fileFolder.isEmpty) return null; // Changed to return null for easier checks
 
-  // Check if the current folder matches the fldID
-  if (fileFolder['folder_id'] == fldID) return fileFolder['folder_data'];
+    // Check if the current folder matches the fldID
+    if (fileFolder['folder_id'] == fldID) return fileFolder['folder_data'];
 
-  // Check if folder_data exists and is a map
-  if (!fileFolder.containsKey('folder_data') || 
-      fileFolder['folder_data'] is! Map) return null;
+    // Check if folder_data exists and is a map
+    if (!fileFolder.containsKey('folder_data') || 
+        fileFolder['folder_data'] is! Map) return null;
 
-  // Iterate over the list of folders in folder_data
-  var folders = fileFolder['folder_data']['folder'];
-  if (folders is! List) return null; // Ensure it's a list
+    // Iterate over the list of folders in folder_data
+    var folders = fileFolder['folder_data']['folder'];
+    if (folders is! List) return null; // Ensure it's a list
 
-  for (dynamic newFileFolder in folders) {
-    dynamic tmpFolderData = _findFolderData(newFileFolder, fldID);
-    if (tmpFolderData != null) return tmpFolderData; // Check against null
+    for (dynamic newFileFolder in folders) {
+      dynamic tmpFolderData = _findFolderData(newFileFolder, fldID);
+      if (tmpFolderData != null) return tmpFolderData; // Check against null
+    }
+
+    return null; // Return null if not found
   }
-
-  return null; // Return null if not found
-}
-
 
   void _deleteLocalFolder(String folderPath) {
       // Create a Directory object
