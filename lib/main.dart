@@ -37,7 +37,7 @@ class MyApp extends StatelessWidget {
         future: getSessionId(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return Scaffold(body: Center(child: CircularProgressIndicator()));
+            return Scaffold(body: Center(child: CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(Colors.blue))));
           } else if (snapshot.hasData && snapshot.data != null && snapshot.data!.isNotEmpty) {
             return MyFilesPage(sessionId: snapshot.data!);
           } else {
@@ -94,7 +94,7 @@ class _LoginPageState extends State<LoginPage> {
     return Scaffold(
       appBar: AppBar(title: Text('Login')),
       body: isLoading
-            ? Center(child: CircularProgressIndicator(),) // Show loading indicator
+            ? Center(child: CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(Colors.blue)),) // Show loading indicator
             : Center( // Centers the entire form
         child: SingleChildScrollView( // Prevents overflow on small screens
           child: Padding(
@@ -109,8 +109,15 @@ class _LoginPageState extends State<LoginPage> {
                       children: [
                         TextField(
                           controller: _emailController,
-                          decoration: InputDecoration(labelText: 'Email'),
+                          decoration: InputDecoration(
+                            labelText: 'Email',
+                            labelStyle: TextStyle(color: Colors.blue), // Change label color
+                            focusedBorder: UnderlineInputBorder(
+                              borderSide: BorderSide(color: Colors.blue, width: 2.0), // Border when focused
+                            ),
+                          ),
                         ),
+
                         SizedBox(height: 30),
                         if (noEmail)
                         Align(
@@ -139,7 +146,13 @@ class _LoginPageState extends State<LoginPage> {
                                   print('Email cannot be empty');
                                 }
                               },
-                              child: Text('Get OTP'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.blue, // Set background color to blue
+                              ), // Disable button while uploading
+                              child: Text(
+                                'Get OTP',
+                                style: TextStyle(color: Colors.white),
+                              ),
                             ),
                             ElevatedButton(
                               onPressed: () async {
@@ -159,7 +172,7 @@ class _LoginPageState extends State<LoginPage> {
                   if (isOtpPage && requestToken != null)
                     OtpPage(requestToken: requestToken!), // Pass non-null requestToken here
                   if (isOtpPage && requestToken == null)
-                    Center(child: CircularProgressIndicator()), // Show loading until requestToken is available
+                    Center(child: CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(Colors.blue))), // Show loading until requestToken is available
                 ],
               ),
             ),
@@ -180,7 +193,7 @@ class OtpPage extends StatefulWidget {
 }
 
 class _OtpPageState extends State<OtpPage> {
-  TextEditingController _otpController = TextEditingController();
+  final TextEditingController _otpController = TextEditingController();
 
   Future<void> setSessionId(String sessionId) async {
     final prefs = await SharedPreferences.getInstance();
@@ -219,7 +232,13 @@ class _OtpPageState extends State<OtpPage> {
       children: [
         TextField(
           controller: _otpController,
-          decoration: InputDecoration(labelText: 'Enter OTP'),
+          decoration: InputDecoration(
+            labelText: 'Enter OTP',
+            labelStyle: TextStyle(color: Colors.blue), // Change label color
+            focusedBorder: UnderlineInputBorder(
+              borderSide: BorderSide(color: Colors.blue, width: 2.0), // Border when focused
+            ),
+          ),
         ),
         SizedBox(height: 30),
         ElevatedButton(
@@ -230,7 +249,13 @@ class _OtpPageState extends State<OtpPage> {
               print('OTP cannot be empty');
             }
           },
-          child: Text('Submit OTP'),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.blue, // Set background color to blue
+          ), // Disable button while uploading
+          child: Text(
+            'Submit OTP',
+            style: TextStyle(color: Colors.white),
+          ),
         ),
       ],
     );
@@ -402,6 +427,9 @@ class _MyFilesPageState extends State<MyFilesPage> {
                   decoration: InputDecoration(
                     hintText: "Enter page number",
                     border: OutlineInputBorder(),
+                    focusedBorder: OutlineInputBorder(
+                      borderSide: BorderSide(color: Colors.blue, width: 2.0), // Border when focused
+                    ),
                   ),
                 ),
               ],
@@ -422,13 +450,13 @@ class _MyFilesPageState extends State<MyFilesPage> {
                     );
                   }
                 },
-                child: Text("Go to"),
+                child: Text("Go to", style: TextStyle(color: Colors.blue),),
               ),
               TextButton(
                 onPressed: () {
                   Navigator.of(context).pop(); // Close dialog
                 },
-                child: Text("Cancel"),
+                child: Text("Cancel", style: TextStyle(color: Colors.blue),),
               ),
             ],
           );
@@ -452,7 +480,7 @@ class _MyFilesPageState extends State<MyFilesPage> {
       appBar: AppBar(
         title: Text(selectionMode ? "${selectedItems.length} selected" : 'My Files'),
         leading: IconButton(
-          icon: Icon(selectionMode ? Icons.close : Icons.arrow_back),
+          icon: Icon(selectionMode ? Icons.close : Icons.arrow_back, color: Colors.blue,),
           onPressed: () {
             if (selectionMode) {
               setState(() {
@@ -466,7 +494,7 @@ class _MyFilesPageState extends State<MyFilesPage> {
         actions: [
           if (!selectionMode) ...[
             IconButton(
-              icon: Icon(Icons.home),
+              icon: Icon(Icons.home, color: Colors.blue),
               onPressed: () => _homeCloudFolder(),
             ),
             IconButton(
@@ -475,7 +503,7 @@ class _MyFilesPageState extends State<MyFilesPage> {
             ),
           ] else ...[
             IconButton(
-              icon: Icon(Icons.select_all),
+              icon: Icon(Icons.select_all, color: Colors.blue),
               onPressed: () {
                 setState(() {
                   if (selectedItems.length == totalItems) {
@@ -503,11 +531,11 @@ class _MyFilesPageState extends State<MyFilesPage> {
       floatingActionButton: copyStatus != 0
           ? FloatingActionButton(
               onPressed: _pasteFile,
-              child: Icon(Icons.paste),
+              child: Icon(Icons.paste, color: Colors.blue),
             )
           : null,
       body: isLoading
-          ? Center(child: CircularProgressIndicator())
+          ? Center(child: CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(Colors.blue)))
           : Column(
               children: [
                 Expanded(
@@ -530,7 +558,7 @@ class _MyFilesPageState extends State<MyFilesPage> {
                                 }
                               },
                               child: ListTile(
-                                leading: Icon(Icons.folder, size: 40, color: isSelected ? Colors.blue : null),
+                                leading: Icon(Icons.folder, size: 40, color: isSelected ? Colors.cyan : Colors.blue),
                                 title: Text(folder['name']),
                                 trailing: IconButton(
                                   icon: Icon(
@@ -616,11 +644,23 @@ class _MyFilesPageState extends State<MyFilesPage> {
                                 });
                               }
                             : null,
-                        child: Text("Previous"),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blue, // Set background color to blue
+                        ), // Disable button while uploading
+                        child: Text(
+                          "Previous",
+                          style: TextStyle(color: Colors.white),
+                        ),
                       ),
                       ElevatedButton(
                         onPressed: () => showGoToPageDialog(context),
-                        child: Text("Page ${currentPage + 1} of ${(totalItems / itemsPerPage).ceil()}"),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blue, // Set background color to blue
+                        ), // Disable button while uploading
+                        child: Text(
+                          "Page ${currentPage + 1} of ${(totalItems / itemsPerPage).ceil()}",
+                          style: TextStyle(color: Colors.white),
+                        ),
                       ),
                       ElevatedButton(
                         onPressed: (currentPage + 1) * itemsPerPage < totalItems
@@ -630,7 +670,13 @@ class _MyFilesPageState extends State<MyFilesPage> {
                                 });
                               }
                             : null,
-                        child: Text("Next"),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blue, // Set background color to blue
+                        ), // Disable button while uploading
+                        child: Text(
+                          "Next",
+                          style: TextStyle(color: Colors.white),
+                        ),
                       ),
                     ],
                   ),
@@ -639,6 +685,7 @@ class _MyFilesPageState extends State<MyFilesPage> {
               ],
             ),
     );
+  
   }
 
   // Display file/folder list with options
@@ -931,7 +978,13 @@ class _MyFilesPageState extends State<MyFilesPage> {
           title: Text('Rename File'),
           content: TextField(
             controller: controller,
-            decoration: InputDecoration(hintText: 'Enter new name'),
+            decoration: InputDecoration(
+              hintText: 'Enter new name',
+              labelStyle: TextStyle(color: Colors.blue), // Change label color
+              focusedBorder: UnderlineInputBorder(
+                borderSide: BorderSide(color: Colors.blue, width: 2.0), // Border when focused
+              ),
+            ),
           ),
           actions: [
             TextButton(
@@ -939,7 +992,7 @@ class _MyFilesPageState extends State<MyFilesPage> {
                 Navigator.pop(context);
                 _renameFile(item, controller.text);
               },
-              child: Text('Rename'),
+              child: Text('Rename', style: TextStyle(color: Colors.blue),),
             ),
           ],
         );
@@ -1140,10 +1193,11 @@ class _MyFilesPageState extends State<MyFilesPage> {
             children: [
               // Sync Options
               ListTile(
-                leading: Icon(Icons.wifi),
+                leading: Icon(Icons.wifi, color: Colors.blue),
                 title: Text("Only Sync Over Wi-Fi"),
                 trailing: Switch(
                   value: _onlyWifiSync,
+                  activeColor: Colors.blue, // Set the active color to blue
                   onChanged: (val) {
                     _toggleWifiSync(val);
                     Navigator.pop(context);
@@ -1151,7 +1205,7 @@ class _MyFilesPageState extends State<MyFilesPage> {
                 ),
               ),
               ListTile(
-                leading: Icon(Icons.backup),
+                leading: Icon(Icons.backup, color: Colors.blue),
                 title: Text("Auto Camera Roll Backup"),
                 trailing: Switch(
                   value: _autoCameraBackup,
@@ -1165,37 +1219,37 @@ class _MyFilesPageState extends State<MyFilesPage> {
 
               // Security Options
               ListTile(
-                leading: Icon(Icons.lock),
+                leading: Icon(Icons.lock, color: Colors.blue),
                 title: Text("App Lock (Password/Face ID)"),
                 onTap: _enableAppLock,
               ),
 
               ListTile(
-                leading: Icon(Icons.pageview),
+                leading: Icon(Icons.pageview, color: Colors.blue),
                 title: Text("Set Number Of Images Per Page"),
                 onTap: _showSetNumberOfImagesPerPage,
               ),
 
               // About & Legal
               ListTile(
-                leading: Icon(Icons.info),
+                leading: Icon(Icons.info, color: Colors.blue),
                 title: Text("About Us"),
                 onTap: () => _openURL("https://filelu.com"),
               ),
               ListTile(
-                leading: Icon(Icons.article),
+                leading: Icon(Icons.article, color: Colors.blue),
                 title: Text("Terms"),
                 onTap: () => _openURL("https://filelu.com/pages/terms/"),
               ),
               ListTile(
-                leading: Icon(Icons.privacy_tip),
+                leading: Icon(Icons.privacy_tip, color: Colors.blue),
                 title: Text("Privacy Policy"),
                 onTap: () => _openURL("https://filelu.com/pages/privacy-policy/"),
               ),
 
               // Logout
               ListTile(
-                leading: Icon(Icons.logout),
+                leading: Icon(Icons.logout, color: Colors.blue),
                 title: Text("Log Out"),
                 onTap: ()=> _logout(context),
               ),
@@ -1252,6 +1306,10 @@ class _MyFilesPageState extends State<MyFilesPage> {
                 decoration: InputDecoration(
                   labelText: "Enter Number",
                   hintText: "e.g. 10",
+                  labelStyle: TextStyle(color: Colors.blue), // Change label color
+                  focusedBorder: UnderlineInputBorder(
+                    borderSide: BorderSide(color: Colors.blue, width: 2.0), // Border when focused
+                  ),
                 ),
               ),
             ],
@@ -1274,13 +1332,13 @@ class _MyFilesPageState extends State<MyFilesPage> {
                 }
                 Navigator.of(context).pop(); // Close the dialog
               },
-              child: Text("Set"),
+              child: Text("Set", style: TextStyle(color: Colors.blue),),
             ),
             TextButton(
               onPressed: () {
                 Navigator.of(context).pop(); // Close the dialog
               },
-              child: Text("Cancel"),
+              child: Text("Cancel", style: TextStyle(color: Colors.blue),),
             ),
           ],
         );
@@ -1420,6 +1478,7 @@ class _MyFilesPageState extends State<MyFilesPage> {
       body: _getPageContent(),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _selectedIndex,
+        selectedItemColor: Colors.blue,
         onTap: _onItemTapped,
         items: [
           BottomNavigationBarItem(
@@ -1697,8 +1756,12 @@ class _SyncPageState extends State<SyncPage> {
                     controller: folderController,
                     decoration: InputDecoration(
                       labelText: "Local Folder Path",
+                      labelStyle: TextStyle(color: Colors.blue), // Change label color
+                      focusedBorder: UnderlineInputBorder(
+                        borderSide: BorderSide(color: Colors.blue, width: 2.0), // Border when focused
+                      ),
                       suffixIcon: IconButton(
-                        icon: Icon(Icons.folder),
+                        icon: Icon(Icons.folder, color: Colors.blue),
                         onPressed: () async {
                           String? selectedFolder = await _pickFolder();
                           if (selectedFolder != null) {
@@ -1711,7 +1774,13 @@ class _SyncPageState extends State<SyncPage> {
                   ),
                   SizedBox(height: 10),
                   TextField(
-                    decoration: InputDecoration(labelText: "Remote Folder"),
+                    decoration: InputDecoration(
+                      labelText: "Remote Folder",
+                      labelStyle: TextStyle(color: Colors.blue), // Change label color
+                      focusedBorder: UnderlineInputBorder(
+                        borderSide: BorderSide(color: Colors.blue, width: 2.0), // Border when focused
+                      ),
+                    ),
                     onChanged: (value) => remotePath = value,
                   ),
                   SizedBox(height: 10),
@@ -1738,11 +1807,17 @@ class _SyncPageState extends State<SyncPage> {
                     _addSyncOrder(folderController.text, selectedType, remotePath);
                     Navigator.pop(context);
                   },
-                  child: Text("Add"),
+                  child: Text(
+                    "Add",
+                    style: TextStyle(color: Colors.blue)
+                  ),
                 ),
                 TextButton(
                   onPressed: () => Navigator.pop(context),
-                  child: Text("Cancel"),
+                  child: Text(
+                    "Cancel",
+                    style: TextStyle(color: Colors.blue)
+                  ),
                 ),
               ],
             );
@@ -2226,10 +2301,11 @@ class _SyncPageState extends State<SyncPage> {
       appBar: AppBar(title: Text('Sync Files & Folders')),
       floatingActionButton: FloatingActionButton(
         onPressed: _showAddSyncOrderDialog,
-        child: Icon(Icons.add),
+        backgroundColor: Colors.blue,
+        child: Icon(Icons.add, color: Colors.white),
       ),
       body: isLoading
-            ? Center(child: CircularProgressIndicator(),) // Show loading indicator
+            ? Center(child: CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(Colors.blue)),) // Show loading indicator
             : Column(
         children: [
           Expanded(
@@ -2248,12 +2324,12 @@ class _SyncPageState extends State<SyncPage> {
                       SizedBox(width: 20),
                       // Start/Stop Button
                       IconButton(
-                        icon: Icon(order.isRunning ? Icons.pause : Icons.play_arrow),
+                        icon: Icon(order.isRunning ? Icons.pause : Icons.play_arrow, color: Colors.blue),
                         onPressed: () => _toggleSync(index),
                       ),
                       // Delete Button
                       IconButton(
-                        icon: Icon(Icons.delete),
+                        icon: Icon(Icons.delete,),
                         onPressed: () => _deleteSyncOrder(index),
                       ),
                     ],
@@ -2411,7 +2487,13 @@ class _UploadPageState extends State<UploadPage> {
           children: [
             ElevatedButton(
               onPressed: _pickFiles,
-              child: Text('Select Files'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blue, // Set background color to blue
+              ), // Disable button while uploading
+              child: Text(
+                'Select Files',
+                style: TextStyle(color: Colors.white),
+              ),
             ),
             SizedBox(height: 20),
             Expanded(
@@ -2427,11 +2509,17 @@ class _UploadPageState extends State<UploadPage> {
             if (isLoading) // Show progress bar when uploading
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 10.0),
-                child: LinearProgressIndicator(value: uploadProgress),
+                child: LinearProgressIndicator(value: uploadProgress, color: Colors.blue,),
               ),
             ElevatedButton(
-              onPressed: isLoading ? null : uploadFiles, // Disable button while uploading
-              child: Text('Upload Files'),
+              onPressed: isLoading ? null : uploadFiles,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blue, // Set background color to blue
+              ), // Disable button while uploading
+              child: Text(
+                'Upload Files',
+                style: TextStyle(color: Colors.white), // Set text color to white
+              ),
             ),
           ],
         ),
@@ -2479,7 +2567,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                 aspectRatio: _controller.value.aspectRatio,
                 child: VideoPlayer(_controller),
               )
-            : CircularProgressIndicator(),
+            : CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(Colors.blue)),
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () {
@@ -2487,7 +2575,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
             _controller.value.isPlaying ? _controller.pause() : _controller.play();
           });
         },
-        child: Icon(_controller.value.isPlaying ? Icons.pause : Icons.play_arrow),
+        child: Icon(_controller.value.isPlaying ? Icons.pause : Icons.play_arrow, color: Colors.blue),
       ),
     );
   }
