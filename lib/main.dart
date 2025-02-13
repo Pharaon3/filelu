@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:io';
@@ -2166,6 +2167,8 @@ class _UploadPageState extends State<UploadPage> {
   final String sessionId;
   bool isLoading = false;
   List<String> selectedFiles = [];
+  double uploadProgress = 0.0; // Track upload progress
+  int uploadedItemCounts = 0;
 
   _UploadPageState({required this.sessionId});
 
@@ -2173,6 +2176,7 @@ class _UploadPageState extends State<UploadPage> {
   void initState() {
     super.initState();
     _initializeServerUrl();
+    timer();
   }
 
   Future<void> _initializeServerUrl() async {
@@ -2194,19 +2198,37 @@ class _UploadPageState extends State<UploadPage> {
   }
 
   Future<void> uploadFiles() async{
+    if (selectedFiles.isEmpty) return;
     setState(() {
       isLoading = true;
+      uploadProgress = 0.0;
     });
     FileUploader uploader = FileUploader(sessionId: widget.sessionId, serverUrl: uploadServer);
-    for (String filePath in selectedFiles) {
+    for (int i = 0; i< selectedFiles.length; i ++) {
+      String filePath = selectedFiles[i];
       print("File $filePath is uploading now...");
       await uploader.uploadFile(filePath);
       print("File $filePath is uploaded.");
+      uploadedItemCounts ++;
     }
     setState(() {
       selectedFiles = [];
       isLoading = false;
     });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text("Files uploaded successfully!")),
+    );
+  }
+
+  Future<void> timer() async {
+    if (selectedFiles.isNotEmpty && isLoading == true) {
+      setState(() {
+        uploadProgress = min(uploadProgress + 0.005, (uploadedItemCounts + 1) / selectedFiles.length);
+        uploadProgress = max(uploadProgress, uploadedItemCounts / selectedFiles.length);
+      });
+    }
+    await Future.delayed(Duration(milliseconds: 50)); // Simulated delay
+    timer();
   }
   
   Future<String> getFolderID(String folderName, String parentFolderID) async {
@@ -2268,31 +2290,37 @@ class _UploadPageState extends State<UploadPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: Text('Upload Files')),
-      body: isLoading
-          ? Center(child: CircularProgressIndicator()) // Show loading indicator
-          : Column(
-              children: [
-                ElevatedButton(
-                  onPressed: _pickFiles,
-                  child: Text('Select Files'),
-                ),
-                SizedBox(height: 20),
-                Expanded(
-                  child: ListView.builder(
-                    itemCount: selectedFiles.length,
-                    itemBuilder: (context, index) {
-                      return ListTile(
-                        title: Text(selectedFiles[index]),
-                      );
-                    },
-                  ),
-                ),
-                ElevatedButton(
-                  onPressed: uploadFiles,
-                  child: Text('Upload Files'),
-                ),
-              ],
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          children: [
+            ElevatedButton(
+              onPressed: _pickFiles,
+              child: Text('Select Files'),
             ),
+            SizedBox(height: 20),
+            Expanded(
+              child: ListView.builder(
+                itemCount: selectedFiles.length,
+                itemBuilder: (context, index) {
+                  return ListTile(
+                    title: Text(selectedFiles[index]),
+                  );
+                },
+              ),
+            ),
+            if (isLoading) // Show progress bar when uploading
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 10.0),
+                child: LinearProgressIndicator(value: uploadProgress),
+              ),
+            ElevatedButton(
+              onPressed: isLoading ? null : uploadFiles, // Disable button while uploading
+              child: Text('Upload Files'),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
