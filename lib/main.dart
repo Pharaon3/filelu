@@ -251,8 +251,8 @@ class _MyFilesPageState extends State<MyFilesPage> {
   List<dynamic> files = [];
   int _selectedIndex = 0; // For bottom navigation index
   List<dynamic> visitedFolderIDs = [[0, '/'], [0, '/']];
-  dynamic copiedFileFolder;
-  int copyStatus = 0; // 0: empty, 1: file copied 2: file moved 3: folder copied 4: folder moved
+  List<dynamic> copiedFileFolders = [];
+  int copyStatus = 0; // 0: empty, 1: copied 2: moved
   bool isLoading = false;
   bool _onlyWifiSync = true;
   bool _autoCameraBackup = false;
@@ -260,6 +260,7 @@ class _MyFilesPageState extends State<MyFilesPage> {
   String uploadServer = "";
   int numberOfImages = 0;
   int currentPage = 0;
+  List<dynamic> selectedItems = [];
 
   @override
   void initState() {
@@ -368,26 +369,25 @@ class _MyFilesPageState extends State<MyFilesPage> {
 
   // Display file/folder list with options
   Widget _buildFileFolderList() {
-    int itemsPerPage = numberOfImages; // This should be set based on your requirement
-    int totalItems = folders.length + files.length; // Total items count
-    List<dynamic> _getPaginatedItems() {
+    int itemsPerPage = numberOfImages; // Number of items per page
+    int totalItems = folders.length + files.length;
+    bool selectionMode = selectedItems.isNotEmpty; // Enable selection mode if items are selected
+
+    List<dynamic> getPaginatedItems() {
       if (itemsPerPage == 0) {
         return [...folders, ...files]; // No limit
       }
-
       int startIndex = currentPage * itemsPerPage;
       int endIndex = startIndex + itemsPerPage;
-
       return [...folders, ...files].sublist(
         startIndex,
-        endIndex > (folders.length + files.length) ? (folders.length + files.length) : endIndex,
+        endIndex > totalItems ? totalItems : endIndex,
       );
     }
 
     // Function to show the dialog
-    void _showGoToPageDialog(BuildContext context) {
+    void showGoToPageDialog(BuildContext context) {
       final TextEditingController controller = TextEditingController();
-      
       showDialog(
         context: context,
         builder: (BuildContext context) {
@@ -436,123 +436,208 @@ class _MyFilesPageState extends State<MyFilesPage> {
       );
     }
 
+    void toggleSelectionMode(Map<String, dynamic> item) {
+      setState(() {
+        if (selectedItems.contains(item)) {
+          selectedItems.remove(item);
+          if (selectedItems.isEmpty) selectionMode = false;
+        } else {
+          selectedItems.add(item);
+          selectionMode = true;
+        }
+      });
+    }
+
     return Scaffold(
       appBar: AppBar(
-        title: Text('My Files'),
+        title: Text(selectionMode ? "${selectedItems.length} selected" : 'My Files'),
         leading: IconButton(
-          icon: Icon(Icons.arrow_back),
+          icon: Icon(selectionMode ? Icons.close : Icons.arrow_back),
           onPressed: () {
-            _backCloudFolder();
+            if (selectionMode) {
+              setState(() {
+                selectedItems.clear();
+              });
+            } else {
+              _backCloudFolder();
+            }
           },
         ),
         actions: [
-          IconButton(
-            icon: Icon(Icons.home),
-            onPressed: () {
-              _homeCloudFolder();
-            },
-          ),
-          IconButton(
-            icon: Icon(Icons.more_vert), // "..." button
-            onPressed: () {
-              _showConfigMenu();
-            },
-          ),
+          if (!selectionMode) ...[
+            IconButton(
+              icon: Icon(Icons.home),
+              onPressed: () => _homeCloudFolder(),
+            ),
+            IconButton(
+              icon: Icon(Icons.more_vert),
+              onPressed: () => _showConfigMenu(),
+            ),
+          ] else ...[
+            IconButton(
+              icon: Icon(Icons.select_all),
+              onPressed: () {
+                setState(() {
+                  if (selectedItems.length == totalItems) {
+                    selectedItems.clear();
+                    selectionMode = false;
+                  } else {
+                    selectedItems = List.from([...folders, ...files]);
+                    selectionMode = true;
+                  }
+                });
+              },
+            ),
+            IconButton(
+              icon: Icon(Icons.more_vert),
+              onPressed: () {
+                setState(() {
+                  selectionMode = false;
+                });
+                _showOptions(context, "");
+              },
+            ),
+          ],
         ],
       ),
-      floatingActionButton:  copyStatus != 0
+      floatingActionButton: copyStatus != 0
           ? FloatingActionButton(
               onPressed: _pasteFile,
               child: Icon(Icons.paste),
             )
-          : null, // Returns null if copyStatus is 0
+          : null,
       body: isLoading
           ? Center(child: CircularProgressIndicator())
           : Column(
-        children: [
-          Expanded(
-            child: ListView(
               children: [
-                if (_getPaginatedItems().isNotEmpty) ...[
-                  // Display Folders
-                  if (folders.isNotEmpty)
-                    ..._getPaginatedItems().where((item) => !item.containsKey('file_code')).map((folder) {
-                      return FileFolder(
-                        name: folder['name'],
-                        isFile: false,
-                        thumbnail: Icon(Icons.folder, size: 40),
-                        onOptionsTap: () => _showOptions(context, folder),
-                        onOpenFileFolder: () => _openCloudFolder(context, folder),
-                      );
-                    }).toList(),
+                Expanded(
+                  child: ListView(
+                    children: [
+                      if (getPaginatedItems().isNotEmpty) ...[
+                        // Display Folders
+                        if (folders.isNotEmpty)
+                          ...getPaginatedItems()
+                              .where((item) => !item.containsKey('file_code'))
+                              .map((folder) {
+                            bool isSelected = selectedItems.contains(folder);
+                            return GestureDetector(
+                              onLongPress: () => toggleSelectionMode(folder),
+                              onTap: () {
+                                if (selectionMode) {
+                                  toggleSelectionMode(folder);
+                                } else {
+                                  _openCloudFolder(context, folder);
+                                }
+                              },
+                              child: ListTile(
+                                leading: Icon(Icons.folder, size: 40, color: isSelected ? Colors.blue : null),
+                                title: Text(folder['name']),
+                                trailing: IconButton(
+                                  icon: Icon(
+                                    selectionMode
+                                        ? (isSelected ? Icons.check_circle : Icons.radio_button_unchecked)
+                                        : Icons.more_vert,
+                                    color: isSelected ? Colors.blue : null,
+                                  ),
+                                  onPressed: selectionMode
+                                      ? () => toggleSelectionMode(folder)
+                                      : () => _showOptions(context, folder),
+                                ),
+                              ),
+                            );
+                          }).toList(),
 
-                  // Display Files
-                  if (files.isNotEmpty)
-                    ..._getPaginatedItems().where((item) => item.containsKey('file_code')).map((file) {
-                      return FileFolder(
-                        name: file['name'],
-                        isFile: true,
-                        thumbnail: Image.network(file['thumbnail']),
-                        onOptionsTap: () => _showOptions(context, file),
-                        onOpenFileFolder: () => openCloudFile(context, file['file_code'], file['name']),
-                      );
-                    }).toList(),
-                ] else ...[
-                  Center(
-                    child: Padding(
-                      padding: EdgeInsets.all(16.0),
-                      child: Text(
-                        "This folder is empty",
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                      ),
-                    ),
+                        // Display Files
+                        if (files.isNotEmpty)
+                          ...getPaginatedItems().where((item) => item.containsKey('file_code')).map((file) {
+                            bool isSelected = selectedItems.contains(file);
+                            return GestureDetector(
+                              onLongPress: () => toggleSelectionMode(file),
+                              onTap: () {
+                                if (selectionMode) {
+                                  toggleSelectionMode(file);
+                                } else {
+                                  openCloudFile(context, file['file_code'], file['name']);
+                                }
+                              },
+                              child: ListTile(
+                                leading: Stack(
+                                  children: [
+                                    Image.network(file['thumbnail'], width: 40, height: 40, fit: BoxFit.cover),
+                                    if (isSelected)
+                                      Positioned.fill(
+                                        child: Container(
+                                          color: Colors.blue.withOpacity(0.5),
+                                          child: Icon(Icons.check, color: Colors.white, size: 40),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                                title: Text(file['name']),
+                                trailing: IconButton(
+                                  icon: Icon(
+                                    selectionMode
+                                        ? (isSelected ? Icons.check_circle : Icons.radio_button_unchecked)
+                                        : Icons.more_vert,
+                                    color: isSelected ? Colors.blue : null,
+                                  ),
+                                  onPressed: selectionMode
+                                      ? () => toggleSelectionMode(file)
+                                      : () => _showOptions(context, file),
+                                ),
+                              ),
+                            );
+                          }).toList(),
+                      ] else ...[
+                        Center(
+                          child: Padding(
+                            padding: EdgeInsets.all(16.0),
+                            child: Text(
+                              "This folder is empty",
+                              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
+                ),
+
+                // Pagination Controls
+                if (totalItems > itemsPerPage && itemsPerPage > 0) ...[
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      ElevatedButton(
+                        onPressed: currentPage > 0
+                            ? () {
+                                setState(() {
+                                  currentPage--;
+                                });
+                              }
+                            : null,
+                        child: Text("Previous"),
+                      ),
+                      ElevatedButton(
+                        onPressed: () => showGoToPageDialog(context),
+                        child: Text("Page ${currentPage + 1} of ${(totalItems / itemsPerPage).ceil()}"),
+                      ),
+                      ElevatedButton(
+                        onPressed: (currentPage + 1) * itemsPerPage < totalItems
+                            ? () {
+                                setState(() {
+                                  currentPage++;
+                                });
+                              }
+                            : null,
+                        child: Text("Next"),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: 16),
                 ],
               ],
             ),
-          ),
-
-          // Pagination Controls
-          if ((folders.length + files.length) > itemsPerPage && itemsPerPage > 0) ...[
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                ElevatedButton(
-                  onPressed: currentPage > 0
-                      ? () {
-                          setState(() {
-                            currentPage--;
-                          });
-                        }
-                      : null,
-                  child: Text("Previous"),
-                ),
-                ElevatedButton(
-                  onPressed: () {
-                    // Open dialog when tapping the button
-                    _showGoToPageDialog(context);
-                  },
-                  child: Text(
-                    "Page ${currentPage + 1} of ${((folders.length + files.length) / itemsPerPage).ceil()}",
-                  ),
-                ),
-
-                ElevatedButton(
-                  onPressed: (currentPage + 1) * itemsPerPage < (folders.length + files.length)
-                      ? () {
-                          setState(() {
-                            currentPage++;
-                          });
-                        }
-                      : null,
-                  child: Text("Next"),
-                ),
-              ],
-            ),
-            SizedBox(height: 16), // Optional spacing
-          ],
-        ],
-      ),
     );
   }
 
@@ -576,26 +661,49 @@ class _MyFilesPageState extends State<MyFilesPage> {
           onCopy: () {
             Navigator.pop(context);
             _copyFile(item, 1);
-            print('Copy ${item['name']}');
           },
           onMove: () {
             Navigator.pop(context);
             _copyFile(item, 2);            
-            print('Move ${item['name']}');
           },
-          onDownload: () {
+          onDownload: () async {
             Navigator.pop(context);
-            if(item.containsKey('file_code')) {
-              downloadFile(item['file_code'], item['name'], "");
+            setState(() {
+              isLoading = true;
+            });
+            if (item != "") {
+              if(item.containsKey('file_code')) {
+                await downloadFile(item['file_code'], item['name'], "");
+              } else {
+                await downloadFolder(item['fld_id'], item['name']);
+              }
             } else {
-              downloadFolder(item['fld_id'], item['name']);
+              for (dynamic selectedItem in selectedItems) {
+                if(selectedItem.containsKey('file_code')) {
+                  await downloadFile(selectedItem['file_code'], selectedItem['name'], "");
+                } else {
+                  await downloadFolder(selectedItem['fld_id'], selectedItem['name']);
+                }
+              }
+              setState(() {
+                selectedItems = [];
+                isLoading = false;
+              });
             }
           },
-          onRemove: () {
+          onRemove: () async {
             Navigator.pop(context);
-            // Implement Remove Logic here
-            _removeFile(item);
-            print('Remove ${item['name']}');
+            if (item != "") {
+              await _removeFile(item);
+            } else {
+              for (dynamic selectedItem in selectedItems) {
+                await _removeFile(selectedItem);
+              }
+              setState(() {
+                selectedItems = [];
+                isLoading = false;
+              });
+            }
           },
         );
       },
@@ -751,6 +859,8 @@ class _MyFilesPageState extends State<MyFilesPage> {
 
   Future<void> downloadFile(String fileCode, String fileName, String filePath) async {
     String saveDirectory = filePath;
+    print("filePath");
+    print(filePath);
     if (filePath == "") saveDirectory = await getDownloadDirectory();
     try {
       // Step 1: Get the download link
@@ -868,16 +978,15 @@ class _MyFilesPageState extends State<MyFilesPage> {
   }
 
   void _copyFile(dynamic item, int copyOrMove) {
-    print('Copying ${item['name']}');
-    copiedFileFolder = item;
-    copyStatus = 1;
-    if (!item.containsKey('file_code')) {
-      copyStatus += 2;
+    copyStatus = copyOrMove;
+    if (item != ""){
+      copiedFileFolders = [item];
+    } else {
+      copiedFileFolders = selectedItems;
+      setState(() {
+        selectedItems = [];
+      });
     }
-    if (copyOrMove == 2) {
-      copyStatus ++;
-    }
-    // Add logic to duplicate the file in your data source
   }
 
   void _pasteFile() async {
@@ -886,83 +995,86 @@ class _MyFilesPageState extends State<MyFilesPage> {
     });
     print("paste file.");
     String folderID = visitedFolderIDs.last.first.toString();
-    if (copyStatus == 1) {  // copy file.
-      print("copy file.");
-      String fileCode = copiedFileFolder['file_code'];
-      final response = await http.get(
-        Uri.parse('https://filelu.com/api/file/clone?file_code=$fileCode&sess_id=${widget.sessionId}'),
-      );
+    for(dynamic copiedFileFolder in copiedFileFolders){
+      if (copyStatus == 1 && copiedFileFolder.containsKey('file_code')) {  // copy file.
+        print("copy file.");
+        String fileCode = copiedFileFolder['file_code'];
+        final response = await http.get(
+          Uri.parse('https://filelu.com/api/file/clone?file_code=$fileCode&sess_id=${widget.sessionId}'),
+        );
 
-      if (response.statusCode == 200) {
-        var data = jsonDecode(response.body);
-        String clonedFileCode = data['result']['filecode'];
+        if (response.statusCode == 200) {
+          var data = jsonDecode(response.body);
+          String clonedFileCode = data['result']['filecode'];
+          final response1 = await http.get(
+            Uri.parse('https://filelu.com/api/file/set_folder?file_code=$clonedFileCode&fld_id=$folderID&sess_id=${widget.sessionId}'),
+          );
+          if (response1.statusCode == 200) {
+            print('Successfully copied.');
+          } else {
+            print("Failed to paste file, it's cloned to the root directory.");
+          }
+        } else {
+          print('Failed to copy file');
+          return;
+        }
+      } else if (copyStatus == 2 && copiedFileFolder.containsKey('file_code')) { // move file.
+        print("move file.");
+        String fileCode = copiedFileFolder['file_code'];
+          final response = await http.get(
+            Uri.parse('https://filelu.com/api/file/set_folder?file_code=$fileCode&fld_id=$folderID&sess_id=${widget.sessionId}'),
+          );
+          if (response.statusCode == 200) {
+            print('Successfully moved.');
+          } else {
+            print("Failed to paste file.");
+          }
+      } else if (copyStatus == 1 && !copiedFileFolder.containsKey('file_code')) { // copy folder.
+        print("copy folder.");
+        String copyFolderID = copiedFileFolder['fld_id'].toString();
+        final response = await http.get(
+          Uri.parse('https://filelu.com/api/folder/copy?fld_id=$copyFolderID&sess_id=${widget.sessionId}'),
+        );
+
+        if (response.statusCode == 200) {
+          var data = jsonDecode(response.body);
+          String clonedFolderID = data['result']['fld_id'].toString();
+          final response1 = await http.get(
+            Uri.parse('https://filelu.com/api/folder/move?fld_id=$clonedFolderID&dest_fld_id=$folderID&sess_id=${widget.sessionId}'),
+          );
+          if (response1.statusCode == 200) {
+            String copiedFolderID = jsonDecode(response.body)['result']['fld_id'].toString();
+            _renameFile(jsonDecode(response.body)['result'], copiedFileFolder['name']);
+            print('Successfully copied.');
+          } else {
+            print("Failed to paste folder, it's cloned to the root directory.");
+          }
+        }
+      } else if (copyStatus == 2 && !copiedFileFolder.containsKey('file_code')) { // move folder.
+        print("move folder.");
+        String moveFolderID = copiedFileFolder['fld_id'].toString();
         final response1 = await http.get(
-          Uri.parse('https://filelu.com/api/file/set_folder?file_code=$clonedFileCode&fld_id=$folderID&sess_id=${widget.sessionId}'),
+          Uri.parse('https://filelu.com/api/folder/move?fld_id=$moveFolderID&dest_fld_id=$folderID&sess_id=${widget.sessionId}'),
         );
         if (response1.statusCode == 200) {
-          print('Successfully copied.');
-        } else {
-          print("Failed to paste file, it's cloned to the root directory.");
-        }
-      } else {
-        print('Failed to copy file');
-        return;
-      }
-    } else if (copyStatus == 2) { // move file.
-      print("move file.");
-      String fileCode = copiedFileFolder['file_code'];
-        final response = await http.get(
-          Uri.parse('https://filelu.com/api/file/set_folder?file_code=$fileCode&fld_id=$folderID&sess_id=${widget.sessionId}'),
-        );
-        if (response.statusCode == 200) {
           print('Successfully moved.');
         } else {
-          print("Failed to paste file.");
+          print("Failed to move.");
         }
-    } else if (copyStatus == 3) { // copy folder.
-      print("copy folder.");
-      String copyFolderID = copiedFileFolder['fld_id'].toString();
-      final response = await http.get(
-        Uri.parse('https://filelu.com/api/folder/copy?fld_id=$copyFolderID&sess_id=${widget.sessionId}'),
-      );
-
-      if (response.statusCode == 200) {
-        var data = jsonDecode(response.body);
-        String clonedFolderID = data['result']['fld_id'].toString();
-        final response1 = await http.get(
-          Uri.parse('https://filelu.com/api/folder/move?fld_id=$clonedFolderID&dest_fld_id=$folderID&sess_id=${widget.sessionId}'),
-        );
-        if (response1.statusCode == 200) {
-          String copiedFolderID = jsonDecode(response.body)['result']['fld_id'].toString();
-          _renameFile(jsonDecode(response.body)['result'], copiedFileFolder['name']);
-          print('Successfully copied.');
-        } else {
-          print("Failed to paste folder, it's cloned to the root directory.");
-        }
-      }
-    } else if (copyStatus == 4) { // move folder.
-      print("move folder.");
-      String moveFolderID = copiedFileFolder['fld_id'];
-      final response1 = await http.get(
-        Uri.parse('https://filelu.com/api/folder/move?fld_id=$moveFolderID&dest_fld_id=$folderID&sess_id=${widget.sessionId}'),
-      );
-      if (response1.statusCode == 200) {
-        print('Successfully moved.');
       } else {
-        print("Failed to move.");
+        print('Nothing to paste.');
       }
-    } else {
-      print('Nothing to paste.');
     }
     copyStatus = 0;
-    copiedFileFolder = Null;
+    copiedFileFolders = [];
     _fetchFilesAndFolders(visitedFolderIDs.last.first.toString());
   }
 
-  void _removeFile(dynamic item) async {
+  Future<void> _removeFile(dynamic item) async {
     setState(() {
       isLoading = true; // Start loading
     });
+    print(item);
     if(item.containsKey('file_code')) {
       String fileCode = item['file_code'].toString();
       final response = await http.get(
@@ -974,10 +1086,12 @@ class _MyFilesPageState extends State<MyFilesPage> {
         print("Failed to remove.");
       }
     } else {
-      String folderID = item['file_code'].toString();
+      String folderID = item['fld_id'].toString();
       final response = await http.get(
         Uri.parse('https://filelu.com/api/folder/delete?fld_id=$folderID&sess_id=${widget.sessionId}'),
       );
+      print(folderID);
+      print(widget.sessionId);
       if (response.statusCode == 200) {
         print('Successfully removed.');
       } else {
@@ -1377,6 +1491,7 @@ class FileOptions extends StatelessWidget {
   Widget build(BuildContext context) {
     return ListView(
       children: [
+        if (item != "")
         ListTile(
           title: Text('Rename'),
           onTap: onRename,
