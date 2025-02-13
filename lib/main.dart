@@ -9,12 +9,22 @@ import 'package:video_player/video_player.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:local_auth/local_auth.dart';
+import 'package:intl/intl.dart';
+import 'dart:convert';
 
 void main() {
   runApp(MyApp());
 }
 
 class MyApp extends StatelessWidget {
+  
+  Future<String?> getSessionId() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString('sessionId');
+  }
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -22,10 +32,21 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         primarySwatch: Colors.blue,
       ),
-      // home: LoginPage(),
-      home: MyFilesPage(sessionId: "6f9e1a5eea407bb4d98f841e1a5d7dc1"),
+      home: FutureBuilder<String?>(
+        future: getSessionId(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return Scaffold(body: Center(child: CircularProgressIndicator()));
+          } else if (snapshot.hasData && snapshot.data != null && snapshot.data!.isNotEmpty) {
+            return MyFilesPage(sessionId: snapshot.data!);
+          } else {
+            return LoginPage();
+          }
+        },
+      ),
     );
   }
+
 }
 
 class LoginPage extends StatefulWidget {
@@ -38,8 +59,12 @@ class _LoginPageState extends State<LoginPage> {
   String? requestToken;
   bool isOtpPage = false;
   bool noEmail = false;
+  bool isLoading = false;
 
   void _getRequestToken(String email) async {
+    setState(() {
+      isLoading = true;
+    });
     final response = await http.get(Uri.parse('https://filelu.com/api/session/request?email=$email'));
 
     if (response.statusCode == 200) {
@@ -58,46 +83,91 @@ class _LoginPageState extends State<LoginPage> {
     } else {
       print('Failed to get request token');
     }
+    setState(() {
+      isLoading = false;
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: Text('Login')),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          children: [
-            if (!isOtpPage)
-              Column(
+      body: isLoading
+            ? Center(child: CircularProgressIndicator(),) // Show loading indicator
+            : Center( // Centers the entire form
+        child: SingleChildScrollView( // Prevents overflow on small screens
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: ConstrainedBox( // Sets a max width to avoid stretching on large screens
+              constraints: BoxConstraints(maxWidth: 400),
+              child: Column(
+                mainAxisSize: MainAxisSize.min, // Prevents unnecessary expansion
                 children: [
-                  TextField(
-                    controller: _emailController,
-                    decoration: InputDecoration(labelText: 'Email'),
-                  ),
-                  if (noEmail)
-                    Text("No Email"),
-                  ElevatedButton(
-                    onPressed: () {
-                      if (_emailController.text.isNotEmpty) {
-                        _getRequestToken(_emailController.text);
-                      } else {
-                        print('Email cannot be empty');
-                      }
-                    },
-                    child: Text('Get OTP'),
-                  ),
+                  if (!isOtpPage)
+                    Column(
+                      children: [
+                        TextField(
+                          controller: _emailController,
+                          decoration: InputDecoration(labelText: 'Email'),
+                        ),
+                        SizedBox(height: 30),
+                        if (noEmail)
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: TextButton(
+                            onPressed: () async {
+                              final Uri url = Uri.parse("https://filelu.com/forgot_pass");
+                              if (await canLaunchUrl(url)) {
+                                await launchUrl(url, mode: LaunchMode.externalApplication);
+                              } else {
+                                print("Could not launch Forgot Password link");
+                              }
+                            },
+                            child: Text("Forgot Password?", style: TextStyle(color: Colors.blue)),
+                          ),
+                        ),
+                        SizedBox(height: 30),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            ElevatedButton(
+                              onPressed: () {
+                                if (_emailController.text.isNotEmpty) {
+                                  _getRequestToken(_emailController.text);
+                                } else {
+                                  print('Email cannot be empty');
+                                }
+                              },
+                              child: Text('Get OTP'),
+                            ),
+                            ElevatedButton(
+                              onPressed: () async {
+                                final Uri url = Uri.parse("https://filelu.com/register/");
+                                if (await canLaunchUrl(url)) {
+                                  await launchUrl(url, mode: LaunchMode.externalApplication);
+                                } else {
+                                  print("Could not launch Sign Up link");
+                                }
+                              },
+                              child: Text("Sign Up", style: TextStyle(color: Colors.blue)),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  if (isOtpPage && requestToken != null)
+                    OtpPage(requestToken: requestToken!), // Pass non-null requestToken here
+                  if (isOtpPage && requestToken == null)
+                    Center(child: CircularProgressIndicator()), // Show loading until requestToken is available
                 ],
               ),
-            if (isOtpPage && requestToken != null)
-              OtpPage(requestToken: requestToken!), // Pass non-null requestToken here
-            if (isOtpPage && requestToken == null)
-              Center(child: CircularProgressIndicator()), // Show loading until requestToken is available
-          ],
+            ),
+          ),
         ),
       ),
     );
   }
+
 }
 
 class OtpPage extends StatefulWidget {
@@ -110,6 +180,11 @@ class OtpPage extends StatefulWidget {
 
 class _OtpPageState extends State<OtpPage> {
   TextEditingController _otpController = TextEditingController();
+
+  Future<void> setSessionId(String sessionId) async {
+    final prefs = await SharedPreferences.getInstance();
+    prefs.setString('sessionId', sessionId);
+  }
 
   void _startSession(String otp) async {
     // Ensure requestToken is not null before making the API call
@@ -124,6 +199,7 @@ class _OtpPageState extends State<OtpPage> {
         } else {
           print("Failed to get session id");
         }
+        setSessionId(sessionId);
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (context) => MyFilesPage(sessionId: sessionId)),
@@ -144,6 +220,7 @@ class _OtpPageState extends State<OtpPage> {
           controller: _otpController,
           decoration: InputDecoration(labelText: 'Enter OTP'),
         ),
+        SizedBox(height: 30),
         ElevatedButton(
           onPressed: () {
             if (_otpController.text.isNotEmpty) {
@@ -157,6 +234,7 @@ class _OtpPageState extends State<OtpPage> {
       ],
     );
   }
+
 }
 
 class MyFilesPage extends StatefulWidget {
@@ -172,17 +250,50 @@ class _MyFilesPageState extends State<MyFilesPage> {
   List<dynamic> files = [];
   int _selectedIndex = 0; // For bottom navigation index
   List<dynamic> visitedFolderIDs = [[0, '/'], [0, '/']];
+  dynamic copiedFileFolder;
+  int copyStatus = 0; // 0: empty, 1: file copied 2: file moved 3: folder copied 4: folder moved
+  bool isLoading = false;
+  bool _onlyWifiSync = true;
+  bool _autoCameraBackup = false;
+  String? _uploadServerURL; // Store URL globally
+  String uploadServer = "";
+  int numberOfImages = 0;
+  int currentPage = 0;
 
   @override
   void initState() {
     super.initState();
     _fetchFilesAndFolders(0);
+    _initializeServerUrl();
+    _loadSettings();
+  }
+
+  Future<void> _initializeServerUrl() async {
+    try {
+      final response = await http.get(
+        Uri.parse('https://filelu.com/api/upload/server?sess_id=${widget.sessionId}'),
+      );
+
+      if (response.statusCode == 200) {
+        var data = jsonDecode(response.body);
+        uploadServer = data['result'];
+        print("Upload server initialized: $uploadServer");
+      } else {
+        print("Failed to get upload server: ${response.reasonPhrase}");
+      }
+    } catch (e) {
+      print("Error fetching upload server: $e");
+    }
   }
 
   // Fetch files and folders using the API
-  Future<void> _fetchFilesAndFolders(fld_id) async {
+  Future<void> _fetchFilesAndFolders(fldId) async {
+    print('fetch file folder of which folder id is $fldId.');
+    setState(() {
+      isLoading = true; // Start loading
+    });
     final response = await http.get(
-      Uri.parse('https://filelu.com/api/folder/list?fld_id=$fld_id&sess_id=${widget.sessionId}'),
+      Uri.parse('https://filelu.com/api/folder/list?fld_id=${fldId.toString()}&sess_id=${widget.sessionId}'),
     );
 
     if (response.statusCode == 200) {
@@ -194,6 +305,9 @@ class _MyFilesPageState extends State<MyFilesPage> {
     } else {
       print('Failed to load folders and files');
     }
+    setState(() {
+      isLoading = false; // Start loading
+    });
   }
 
   Future<String> _getDownloadLink(fileCode) async {
@@ -245,7 +359,7 @@ class _MyFilesPageState extends State<MyFilesPage> {
       case 1:
         return _buildSyncPage();
       case 2:
-        return Center(child: Text("Upload Page"));
+        return UploadPage(sessionId: widget.sessionId,);
       default:
         return _buildFileFolderList();
     }
@@ -253,6 +367,74 @@ class _MyFilesPageState extends State<MyFilesPage> {
 
   // Display file/folder list with options
   Widget _buildFileFolderList() {
+    int itemsPerPage = numberOfImages; // This should be set based on your requirement
+    int totalItems = folders.length + files.length; // Total items count
+    List<dynamic> _getPaginatedItems() {
+      if (itemsPerPage == 0) {
+        return [...folders, ...files]; // No limit
+      }
+
+      int startIndex = currentPage * itemsPerPage;
+      int endIndex = startIndex + itemsPerPage;
+
+      return [...folders, ...files].sublist(
+        startIndex,
+        endIndex > (folders.length + files.length) ? (folders.length + files.length) : endIndex,
+      );
+    }
+
+    // Function to show the dialog
+    void _showGoToPageDialog(BuildContext context) {
+      final TextEditingController controller = TextEditingController();
+      
+      showDialog(
+        context: context,
+        builder: (BuildContext context) {
+          return AlertDialog(
+            title: Text("Go to Page"),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: controller,
+                  keyboardType: TextInputType.number,
+                  decoration: InputDecoration(
+                    hintText: "Enter page number",
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  int? page = int.tryParse(controller.text);
+                  if (page != null && page > 0 && page <= ((folders.length + files.length) / itemsPerPage).ceil()) {
+                    setState(() {
+                      currentPage = page - 1; // Update currentPage
+                    });
+                    Navigator.of(context).pop(); // Close dialog
+                  } else {
+                    // Optionally show an error message
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text("Invalid page number")),
+                    );
+                  }
+                },
+                child: Text("Go to"),
+              ),
+              TextButton(
+                onPressed: () {
+                  Navigator.of(context).pop(); // Close dialog
+                },
+                child: Text("Cancel"),
+              ),
+            ],
+          );
+        },
+      );
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: Text('My Files'),
@@ -269,44 +451,104 @@ class _MyFilesPageState extends State<MyFilesPage> {
               _homeCloudFolder();
             },
           ),
+          IconButton(
+            icon: Icon(Icons.more_vert), // "..." button
+            onPressed: () {
+              _showConfigMenu();
+            },
+          ),
         ],
       ),
-      body: ListView(
+      floatingActionButton:  copyStatus != 0
+          ? FloatingActionButton(
+              onPressed: _pasteFile,
+              child: Icon(Icons.paste),
+            )
+          : null, // Returns null if copyStatus is 0
+      body: isLoading
+          ? Center(child: CircularProgressIndicator())
+          : Column(
         children: [
-          if (folders.isNotEmpty || files.isNotEmpty) ...[
-            // Display Folders
-            if (folders.isNotEmpty)
-              ...folders.map((folder) {
-                return FileFolder(
-                  name: folder['name'],
-                  isFile: false,
-                  thumbnail: Icon(Icons.folder, size: 40), // Default icon
-                  onOptionsTap: () => _showOptions(context, folder),
-                  onOpenFileFolder: () => _openCloudFolder(context, folder),
-                );
-              }).toList(),
+          Expanded(
+            child: ListView(
+              children: [
+                if (_getPaginatedItems().isNotEmpty) ...[
+                  // Display Folders
+                  if (folders.isNotEmpty)
+                    ..._getPaginatedItems().where((item) => !item.containsKey('file_code')).map((folder) {
+                      return FileFolder(
+                        name: folder['name'],
+                        isFile: false,
+                        thumbnail: Icon(Icons.folder, size: 40),
+                        onOptionsTap: () => _showOptions(context, folder),
+                        onOpenFileFolder: () => _openCloudFolder(context, folder),
+                      );
+                    }).toList(),
 
-            // Display Files
-            if (files.isNotEmpty)
-              ...files.map((file) {
-                return FileFolder(
-                  name: file['name'],
-                  isFile: true,
-                  thumbnail: Image.network(file['thumbnail']),
-                  onOptionsTap: () => _showOptions(context, file),
-                  onOpenFileFolder: () => openCloudFile(context, file['file_code'], file['name']),
-                );
-              }).toList(),
-          ] else ...[
-            Center(
-              child: Padding(
-                padding: EdgeInsets.all(16.0),
-                child: Text(
-                  "This folder is empty",
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                ),
-              ),
+                  // Display Files
+                  if (files.isNotEmpty)
+                    ..._getPaginatedItems().where((item) => item.containsKey('file_code')).map((file) {
+                      return FileFolder(
+                        name: file['name'],
+                        isFile: true,
+                        thumbnail: Image.network(file['thumbnail']),
+                        onOptionsTap: () => _showOptions(context, file),
+                        onOpenFileFolder: () => openCloudFile(context, file['file_code'], file['name']),
+                      );
+                    }).toList(),
+                ] else ...[
+                  Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(16.0),
+                      child: Text(
+                        "This folder is empty",
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ),
+                ],
+              ],
             ),
+          ),
+
+          // Pagination Controls
+          if ((folders.length + files.length) > itemsPerPage && itemsPerPage > 0) ...[
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                ElevatedButton(
+                  onPressed: currentPage > 0
+                      ? () {
+                          setState(() {
+                            currentPage--;
+                          });
+                        }
+                      : null,
+                  child: Text("Previous"),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    // Open dialog when tapping the button
+                    _showGoToPageDialog(context);
+                  },
+                  child: Text(
+                    "Page ${currentPage + 1} of ${((folders.length + files.length) / itemsPerPage).ceil()}",
+                  ),
+                ),
+
+                ElevatedButton(
+                  onPressed: (currentPage + 1) * itemsPerPage < (folders.length + files.length)
+                      ? () {
+                          setState(() {
+                            currentPage++;
+                          });
+                        }
+                      : null,
+                  child: Text("Next"),
+                ),
+              ],
+            ),
+            SizedBox(height: 16), // Optional spacing
           ],
         ],
       ),
@@ -327,17 +569,17 @@ class _MyFilesPageState extends State<MyFilesPage> {
           item: item,
           onRename: () {
             Navigator.pop(context);
-            // Implement Rename Logic here
+            _showRenameDialog(context, item);
             print('Rename ${item['name']}');
           },
           onCopy: () {
             Navigator.pop(context);
-            // Implement Copy Logic here
+            _copyFile(item, 1);
             print('Copy ${item['name']}');
           },
           onMove: () {
             Navigator.pop(context);
-            // Implement Move Logic here
+            _copyFile(item, 2);            
             print('Move ${item['name']}');
           },
           onDownload: () {
@@ -351,6 +593,7 @@ class _MyFilesPageState extends State<MyFilesPage> {
           onRemove: () {
             Navigator.pop(context);
             // Implement Remove Logic here
+            _removeFile(item);
             print('Remove ${item['name']}');
           },
         );
@@ -568,6 +811,181 @@ class _MyFilesPageState extends State<MyFilesPage> {
     }
   }
 
+  void _showRenameDialog(BuildContext context, dynamic item) {
+    TextEditingController controller = TextEditingController(text: item['name']);
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text('Rename File'),
+          content: TextField(
+            controller: controller,
+            decoration: InputDecoration(hintText: 'Enter new name'),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context);
+                _renameFile(item, controller.text);
+              },
+              child: Text('Rename'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _renameFile(dynamic item, String newName) async {
+    setState(() {
+      isLoading = true; // Start loading
+    });
+    final response;
+    if (item.containsKey('file_code')) {
+      String fileCode = item['file_code'].toString();
+      response = await http.get(
+        Uri.parse('https://filelu.com/api/file/rename?file_code=$fileCode&name=$newName&sess_id=${widget.sessionId}'),
+      );
+    } else if (item.containsKey('fld_id')) {
+      String folderID = item['fld_id'].toString();
+      response = await http.get(
+        Uri.parse('https://filelu.com/api/folder/rename?fld_id=$folderID&name=$newName&sess_id=${widget.sessionId}'),
+      );
+    } else {
+      response = {'statusCode': 404};
+    }
+    
+    if (response.statusCode == 200) {
+      await _fetchFilesAndFolders(visitedFolderIDs.last.first);
+      print('Successfully rename ${item['name']} to $newName.');
+    } else {
+      print('Rename ${item.name} failed');
+    }
+    setState(() {
+      isLoading = false; // Start loading
+    });
+  }
+
+  void _copyFile(dynamic item, int copyOrMove) {
+    print('Copying ${item['name']}');
+    copiedFileFolder = item;
+    copyStatus = 1;
+    if (!item.containsKey('file_code')) {
+      copyStatus += 2;
+    }
+    if (copyOrMove == 2) {
+      copyStatus ++;
+    }
+    // Add logic to duplicate the file in your data source
+  }
+
+  void _pasteFile() async {
+    setState(() {
+      isLoading = true; // Start loading
+    });
+    print("paste file.");
+    String folderID = visitedFolderIDs.last.first.toString();
+    if (copyStatus == 1) {  // copy file.
+      print("copy file.");
+      String fileCode = copiedFileFolder['file_code'];
+      final response = await http.get(
+        Uri.parse('https://filelu.com/api/file/clone?file_code=$fileCode&sess_id=${widget.sessionId}'),
+      );
+
+      if (response.statusCode == 200) {
+        var data = jsonDecode(response.body);
+        String clonedFileCode = data['result']['filecode'];
+        final response1 = await http.get(
+          Uri.parse('https://filelu.com/api/file/set_folder?file_code=$clonedFileCode&fld_id=$folderID&sess_id=${widget.sessionId}'),
+        );
+        if (response1.statusCode == 200) {
+          print('Successfully copied.');
+        } else {
+          print("Failed to paste file, it's cloned to the root directory.");
+        }
+      } else {
+        print('Failed to copy file');
+        return;
+      }
+    } else if (copyStatus == 2) { // move file.
+      print("move file.");
+      String fileCode = copiedFileFolder['file_code'];
+        final response = await http.get(
+          Uri.parse('https://filelu.com/api/file/set_folder?file_code=$fileCode&fld_id=$folderID&sess_id=${widget.sessionId}'),
+        );
+        if (response.statusCode == 200) {
+          print('Successfully moved.');
+        } else {
+          print("Failed to paste file.");
+        }
+    } else if (copyStatus == 3) { // copy folder.
+      print("copy folder.");
+      String copyFolderID = copiedFileFolder['fld_id'].toString();
+      final response = await http.get(
+        Uri.parse('https://filelu.com/api/folder/copy?fld_id=$copyFolderID&sess_id=${widget.sessionId}'),
+      );
+
+      if (response.statusCode == 200) {
+        var data = jsonDecode(response.body);
+        String clonedFolderID = data['result']['fld_id'].toString();
+        final response1 = await http.get(
+          Uri.parse('https://filelu.com/api/folder/move?fld_id=$clonedFolderID&dest_fld_id=$folderID&sess_id=${widget.sessionId}'),
+        );
+        if (response1.statusCode == 200) {
+          String copiedFolderID = jsonDecode(response.body)['result']['fld_id'].toString();
+          _renameFile(jsonDecode(response.body)['result'], copiedFileFolder['name']);
+          print('Successfully copied.');
+        } else {
+          print("Failed to paste folder, it's cloned to the root directory.");
+        }
+      }
+    } else if (copyStatus == 4) { // move folder.
+      print("move folder.");
+      String moveFolderID = copiedFileFolder['fld_id'];
+      final response1 = await http.get(
+        Uri.parse('https://filelu.com/api/folder/move?fld_id=$moveFolderID&dest_fld_id=$folderID&sess_id=${widget.sessionId}'),
+      );
+      if (response1.statusCode == 200) {
+        print('Successfully moved.');
+      } else {
+        print("Failed to move.");
+      }
+    } else {
+      print('Nothing to paste.');
+    }
+    copyStatus = 0;
+    copiedFileFolder = Null;
+    _fetchFilesAndFolders(visitedFolderIDs.last.first.toString());
+  }
+
+  void _removeFile(dynamic item) async {
+    setState(() {
+      isLoading = true; // Start loading
+    });
+    if(item.containsKey('file_code')) {
+      String fileCode = item['file_code'].toString();
+      final response = await http.get(
+        Uri.parse('https://filelu.com/api/file/remove?file_code=$fileCode&remove=1&sess_id=${widget.sessionId}'),
+      );
+      if (response.statusCode == 200) {
+        print('Successfully removed.');
+      } else {
+        print("Failed to remove.");
+      }
+    } else {
+      String folderID = item['file_code'].toString();
+      final response = await http.get(
+        Uri.parse('https://filelu.com/api/folder/delete?fld_id=$folderID&sess_id=${widget.sessionId}'),
+      );
+      if (response.statusCode == 200) {
+        print('Successfully removed.');
+      } else {
+        print("Failed to remove.");
+      }
+    }
+    _fetchFilesAndFolders(visitedFolderIDs.last.first.toString());
+  }
+
   Future<void> createFolderIfNotExists(String path) async {
     final directory = Directory(path);
 
@@ -582,9 +1000,9 @@ class _MyFilesPageState extends State<MyFilesPage> {
   }
 
   // Fetch files and folders using the API
-  Future<dynamic> fetchFilesAndFolders(fld_id) async {
+  Future<dynamic> fetchFilesAndFolders(fldId) async {
     final response = await http.get(
-      Uri.parse('https://filelu.com/api/folder/list?fld_id=$fld_id&sess_id=${widget.sessionId}'),
+      Uri.parse('https://filelu.com/api/folder/list?fld_id=${fldId.toString()}&sess_id=${widget.sessionId}'),
     );
 
     if (response.statusCode == 200) {
@@ -593,6 +1011,291 @@ class _MyFilesPageState extends State<MyFilesPage> {
     } else {
       print('Failed to load folders and files');
       return [];
+    }
+  }
+
+  void _showConfigMenu() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) {
+        return SingleChildScrollView(
+          child:Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Sync Options
+              ListTile(
+                leading: Icon(Icons.wifi),
+                title: Text("Only Sync Over Wi-Fi"),
+                trailing: Switch(
+                  value: _onlyWifiSync,
+                  onChanged: (val) {
+                    _toggleWifiSync(val);
+                    Navigator.pop(context);
+                  },
+                ),
+              ),
+              ListTile(
+                leading: Icon(Icons.backup),
+                title: Text("Auto Camera Roll Backup"),
+                trailing: Switch(
+                  value: _autoCameraBackup,
+                  onChanged: (val) {
+                    setState(() => _autoCameraBackup = val);
+                    Navigator.pop(context);
+                    _toggleCameraBackup(val);
+                  },
+                ),
+              ),
+
+              // Security Options
+              ListTile(
+                leading: Icon(Icons.lock),
+                title: Text("App Lock (Password/Face ID)"),
+                onTap: _enableAppLock,
+              ),
+
+              ListTile(
+                leading: Icon(Icons.pageview),
+                title: Text("Set Number Of Images Per Page"),
+                onTap: _showSetNumberOfImagesPerPage,
+              ),
+
+              // About & Legal
+              ListTile(
+                leading: Icon(Icons.info),
+                title: Text("About Us"),
+                onTap: () => _openURL("https://filelu.com"),
+              ),
+              ListTile(
+                leading: Icon(Icons.article),
+                title: Text("Terms"),
+                onTap: () => _openURL("https://filelu.com/pages/terms/"),
+              ),
+              ListTile(
+                leading: Icon(Icons.privacy_tip),
+                title: Text("Privacy Policy"),
+                onTap: () => _openURL("https://filelu.com/pages/privacy-policy/"),
+              ),
+
+              // Logout
+              ListTile(
+                leading: Icon(Icons.logout),
+                title: Text("Log Out"),
+                onTap: ()=> _logout(context),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _showBackupOptions() {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text("Auto Camera Roll Backup"),
+          content: Text("Start backup from:"),
+          actions: [
+            TextButton(
+              onPressed: () {
+                _startBackup(fromToday: true);
+                Navigator.pop(context);
+              },
+              child: Text("Today Only"),
+            ),
+            TextButton(
+              onPressed: () {
+                _startBackup(fromToday: false);
+                Navigator.pop(context);
+              },
+              child: Text("From Beginning"),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _showSetNumberOfImagesPerPage() {
+    final TextEditingController controller = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text("Set Number Of Images Per Page"),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text("Default 0: no limitation"),
+              TextField(
+                controller: controller,
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(
+                  labelText: "Enter Number",
+                  hintText: "e.g. 10",
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                // Handle the input value
+                int? enteredNumberOfImages = int.tryParse(controller.text);
+                if (enteredNumberOfImages != null) {
+                  // Use the number as needed
+                  setState(() {
+                    numberOfImages = enteredNumberOfImages;
+                    currentPage = 0;
+                  });
+                  print("Number of images per page: $enteredNumberOfImages");
+                } else {
+                  // Handle invalid input
+                  print("Invalid input. Please enter a valid number.");
+                }
+                Navigator.of(context).pop(); // Close the dialog
+              },
+              child: Text("Set"),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop(); // Close the dialog
+              },
+              child: Text("Cancel"),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _loadSettings() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _onlyWifiSync = prefs.getBool('onlyWifiSync') ?? true;
+      _autoCameraBackup = prefs.getBool('autoCameraBackup') ?? false;
+    });
+  }
+
+  Future<void> _saveSetting(String key, bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(key, value);
+  }
+
+  void _toggleWifiSync(bool value) {
+    setState(() {
+      _onlyWifiSync = value;
+    });
+    _saveSetting('onlyWifiSync', value);
+  }
+
+  void _toggleCameraBackup(bool value) {
+    setState(() {
+      _autoCameraBackup = value;
+    });
+    _saveSetting('autoCameraBackup', value);
+
+    if (value) {
+      _showBackupOptions();
+    }
+  }
+
+  void _openURL(String url) async {
+    Uri uri = Uri.parse(url);
+
+    if (Platform.isWindows) {
+      // Use `Process.start` on Windows instead of `launchUrl`
+      await Process.start('explorer.exe', [url]);
+    } else {
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } else {
+        print("❌ Could not open: $url");
+      }
+    }
+  }
+
+  Future<void> _enableAppLock() async {
+    final localAuth = LocalAuthentication();
+    bool canAuthenticate = await localAuth.canCheckBiometrics || await localAuth.isDeviceSupported();
+
+    if (canAuthenticate) {
+      bool didAuthenticate = await localAuth.authenticate(
+        localizedReason: 'Please authenticate to enable App Lock',
+      );
+
+      if (didAuthenticate) {
+        print("App Lock Enabled");
+        // Save lock setting in SharedPreferences
+        _saveSetting('appLock', true);
+      }
+    } else {
+      print("Biometric authentication not available");
+    }
+  }
+
+  void _logout(BuildContext context) async {
+    final prefs = await SharedPreferences.getInstance();
+    prefs.setString('sessionId', "");
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (context) => LoginPage()),
+      (Route<dynamic> route) => false, // Removes all previous routes
+    );
+  }
+
+  Future<void> _startBackup({required bool fromToday}) async {
+    final directory = await _getCameraRollDirectory();
+    if (directory == null) {
+      print("Camera Roll folder not found");
+      return;
+    }
+
+    List<FileSystemEntity> mediaFiles = directory.listSync().where(
+      (file) {
+        if (file is File) {
+          final ext = file.path.split('.').last.toLowerCase();
+          return ["jpg", "jpeg", "png", "mp4", "mov"].contains(ext);
+        }
+        return false;
+      },
+    ).toList();
+
+    if (fromToday) {
+      final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
+      mediaFiles = mediaFiles.where((file) {
+        return FileStat.statSync(file.path).modified.isAfter(DateTime.parse(today));
+      }).toList();
+    }
+
+    for (var file in mediaFiles) {
+      FileUploader uploader = FileUploader(sessionId: widget.sessionId, serverUrl: uploadServer);
+      String fileCode = await uploader.uploadFile(file.path);
+      String cameraFolderID = await uploader.getFolderID("Camera", "0");
+      if (cameraFolderID == "") {
+        cameraFolderID = await uploader.createCloudFolder("Camera", "0");
+      }
+      await uploader.moveFile(fileCode, cameraFolderID);
+      // await _uploadFileToCloud(file.path);
+    }
+
+    print("Backup completed: ${mediaFiles.length} files uploaded");
+  }
+
+  Future<Directory?> _getCameraRollDirectory() async {
+    if (Platform.isAndroid) {
+      return Directory("/storage/emulated/0/DCIM/Camera");
+    } else if (Platform.isIOS) {
+      final dir = await getApplicationDocumentsDirectory();
+      return Directory("${dir.path}/DCIM");
+    } else if (Platform.isWindows) {
+      final userProfile = Platform.environment['USERPROFILE'];
+      return Directory("$userProfile\\Pictures\\Camera Roll");
+    } else {
+      return null;
     }
   }
 
@@ -620,9 +1323,9 @@ class _MyFilesPageState extends State<MyFilesPage> {
       ),
     );
   }
+
 }
 
-// A widget for displaying files or folders in the list
 class FileFolder extends StatelessWidget {
   final String name;
   final bool isFile;
@@ -652,7 +1355,6 @@ class FileFolder extends StatelessWidget {
   }
 }
 
-// A widget for showing file/folder options
 class FileOptions extends StatelessWidget {
   final dynamic item;
   final VoidCallback onRename;
@@ -751,6 +1453,7 @@ class _SyncPageState extends State<SyncPage> {
   String uploadServer = "";
   dynamic syncedFileFolders = {};
   final String sessionId;
+  bool isLoading = false;
 
   _SyncPageState({required this.sessionId});
 
@@ -1004,7 +1707,7 @@ class _SyncPageState extends State<SyncPage> {
         if (uploadFile.existsSync()) {
           FileUploader uploader = FileUploader(sessionId: widget.sessionId, serverUrl: uploadServer);
           String fileCode = await uploader.uploadFile(filePath);
-          await moveFile(fileCode, folderID);
+          await uploader.moveFile(fileCode, folderID);
         }
       }
     }
@@ -1109,7 +1812,7 @@ class _SyncPageState extends State<SyncPage> {
         if (uploadFile.existsSync()) {
           FileUploader uploader = FileUploader(sessionId: widget.sessionId, serverUrl: uploadServer);
           String fileCode = await uploader.uploadFile(filePath);
-          await moveFile(fileCode, folderID);
+          await uploader.moveFile(fileCode, folderID);
         }
       }
     }
@@ -1210,7 +1913,7 @@ class _SyncPageState extends State<SyncPage> {
         if (uploadFile.existsSync()) {
           FileUploader uploader = FileUploader(sessionId: widget.sessionId, serverUrl: uploadServer);
           String fileCode = await uploader.uploadFile(filePath);
-          await moveFile(fileCode, folderID);
+          await uploader.moveFile(fileCode, folderID);
         }
       }
     }
@@ -1367,10 +2070,6 @@ class _SyncPageState extends State<SyncPage> {
     return "";
   }
 
-  Future<void> moveFile(String fileCode, String folderID) async {
-    await http.get(Uri.parse('https://filelu.com/api/file/set_folder?file_code=$fileCode&fld_id=$folderID&sess_id=${widget.sessionId}'));
-  }
-
   Future<String> createCloudFolder(String localFolder, String parentId) async {
     final response = await http.get(
       Uri.parse('https://filelu.com/api/folder/create?parent_id=$parentId&name=$localFolder&sess_id=${widget.sessionId}')
@@ -1395,6 +2094,16 @@ class _SyncPageState extends State<SyncPage> {
     }
   }
 
+  String abbreviate(String path, {int maxLength = 25}) {
+    if (path.length <= maxLength) {
+      return path;
+    }
+    int startLength = (maxLength ~/ 2) - 1; // Length of the start part
+    int endLength = maxLength - startLength - 3; // Length of the end part (for "...")
+    
+    return '${path.substring(0, startLength)}...${path.substring(path.length - endLength)}';
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -1403,7 +2112,9 @@ class _SyncPageState extends State<SyncPage> {
         onPressed: _showAddSyncOrderDialog,
         child: Icon(Icons.add),
       ),
-      body: Column(
+      body: isLoading
+            ? Center(child: CircularProgressIndicator(),) // Show loading indicator
+            : Column(
         children: [
           Expanded(
             child: ListView.builder(
@@ -1415,8 +2126,8 @@ class _SyncPageState extends State<SyncPage> {
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(order.localPath),
-                      SizedBox(width: 50),
+                      Text(abbreviate(order.localPath)),
+                      SizedBox(width: 20),
                       Text("/${order.remotePath}"),
                       SizedBox(width: 20),
                       // Start/Stop Button
@@ -1437,6 +2148,151 @@ class _SyncPageState extends State<SyncPage> {
           ),
         ],
       ),
+    );
+  }
+
+}
+
+class UploadPage extends StatefulWidget {
+  final String sessionId;
+  UploadPage({required this.sessionId});
+
+  @override
+  _UploadPageState createState() => _UploadPageState(sessionId: sessionId);
+}
+
+class _UploadPageState extends State<UploadPage> {
+  String uploadServer = "";
+  final String sessionId;
+  bool isLoading = false;
+  List<String> selectedFiles = [];
+
+  _UploadPageState({required this.sessionId});
+
+  @override
+  void initState() {
+    super.initState();
+    _initializeServerUrl();
+  }
+
+  Future<void> _initializeServerUrl() async {
+    try {
+      final response = await http.get(
+        Uri.parse('https://filelu.com/api/upload/server?sess_id=$sessionId'),
+      );
+
+      if (response.statusCode == 200) {
+        var data = jsonDecode(response.body);
+        uploadServer = data['result'];
+        print("Upload server initialized: $uploadServer");
+      } else {
+        print("Failed to get upload server: ${response.reasonPhrase}");
+      }
+    } catch (e) {
+      print("Error fetching upload server: $e");
+    }
+  }
+
+  Future<void> uploadFiles() async{
+    setState(() {
+      isLoading = true;
+    });
+    FileUploader uploader = FileUploader(sessionId: widget.sessionId, serverUrl: uploadServer);
+    for (String filePath in selectedFiles) {
+      print("File $filePath is uploading now...");
+      await uploader.uploadFile(filePath);
+      print("File $filePath is uploaded.");
+    }
+    setState(() {
+      selectedFiles = [];
+      isLoading = false;
+    });
+  }
+  
+  Future<String> getFolderID(String folderName, String parentFolderID) async {
+    final response = await http.get(
+      Uri.parse('https://filelu.com/api/folder/list?fld_id=$parentFolderID&sess_id=${widget.sessionId}'),
+    );
+    if (response.statusCode == 200) {
+      var data = jsonDecode(response.body);
+      List<String> cloudFolders = List<String>.from(data['result']['folders'].map((file) => file['name']));
+      List<String> cloudFolderCodes = List<String>.from(data['result']['folders'].map((file) => file['fld_id'].toString()));
+      for (int i = 0; i < cloudFolders.length; i ++) {
+        if (cloudFolders[i] == folderName) {
+          return cloudFolderCodes[i];
+        }
+      }
+    }
+    return "";
+  }
+
+  Future<void> _pickFiles() async {
+    setState(() {
+      isLoading = true; // Start loading
+    });
+
+    // Pick files
+    try {
+      final result = await FilePicker.platform.pickFiles(allowMultiple: true);
+      if (result != null) {
+        setState(() {
+          selectedFiles = result.paths.map((path) => path!).toList();
+        });
+      }
+    } catch (e) {
+      // Handle error
+      print('Error picking files: $e');
+    } finally {
+      setState(() {
+        isLoading = false; // End loading
+      });
+    }
+  }
+
+  Future<void> moveFile(String fileCode, String folderID) async {
+    await http.get(Uri.parse('https://filelu.com/api/file/set_folder?file_code=$fileCode&fld_id=$folderID&sess_id=${widget.sessionId}'));
+  }
+
+  Future<String> createCloudFolder(String localFolder, String parentId) async {
+    final response = await http.get(
+      Uri.parse('https://filelu.com/api/folder/create?parent_id=$parentId&name=$localFolder&sess_id=${widget.sessionId}')
+    );
+    if (response.statusCode == 200) {
+      var data = jsonDecode(response.body);
+      return data['result']['fld_id'].toString();
+    }
+    return "";
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text('Upload Files')),
+      body: isLoading
+          ? Center(child: CircularProgressIndicator()) // Show loading indicator
+          : Column(
+              children: [
+                ElevatedButton(
+                  onPressed: _pickFiles,
+                  child: Text('Select Files'),
+                ),
+                SizedBox(height: 20),
+                Expanded(
+                  child: ListView.builder(
+                    itemCount: selectedFiles.length,
+                    itemBuilder: (context, index) {
+                      return ListTile(
+                        title: Text(selectedFiles[index]),
+                      );
+                    },
+                  ),
+                ),
+                ElevatedButton(
+                  onPressed: uploadFiles,
+                  child: Text('Upload Files'),
+                ),
+              ],
+            ),
     );
   }
 
@@ -1500,7 +2356,6 @@ class FileUploader {
 
   FileUploader({required this.sessionId, required this.serverUrl});
   /// Fetch available upload server URL at startup
-  
 
   /// Upload file to server
   Future<String> uploadFile(String filePath) async {
@@ -1533,4 +2388,37 @@ class FileUploader {
     }
     return "";
   }
+  
+  Future<void> moveFile(String fileCode, String folderID) async {
+    await http.get(Uri.parse('https://filelu.com/api/file/set_folder?file_code=$fileCode&fld_id=$folderID&sess_id=$sessionId'));
+  }
+
+  Future<String> getFolderID(String folderName, String parentFolderID) async {
+    final response = await http.get(
+      Uri.parse('https://filelu.com/api/folder/list?fld_id=$parentFolderID&sess_id=$sessionId'),
+    );
+    if (response.statusCode == 200) {
+      var data = jsonDecode(response.body);
+      List<String> cloudFolders = List<String>.from(data['result']['folders'].map((folder) => folder['name']));
+      List<String> cloudFolderCodes = List<String>.from(data['result']['folders'].map((folder) => folder['fld_id'].toString()));
+      for (int i = 0; i < cloudFolders.length; i ++) {
+        if (cloudFolders[i] == folderName) {
+          return cloudFolderCodes[i];
+        }
+      }
+    }
+    return "";
+  }
+
+  Future<String> createCloudFolder(String localFolder, String parentId) async {
+    final response = await http.get(
+      Uri.parse('https://filelu.com/api/folder/create?parent_id=$parentId&name=$localFolder&sess_id=$sessionId')
+    );
+    if (response.statusCode == 200) {
+      var data = jsonDecode(response.body);
+      return data['result']['fld_id'].toString();
+    }
+    return "";
+  }
+
 }
