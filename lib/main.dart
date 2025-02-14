@@ -324,7 +324,7 @@ class _MyFilesPageState extends State<MyFilesPage> {
     );
 
     if (response.statusCode == 200) {
-      var data = jsonDecode(response.body);
+      var data = jsonDecode(utf8.decode(response.bodyBytes));
       setState(() {
         folders = data['result']['folders'];
         files = data['result']['files'];
@@ -770,6 +770,9 @@ class _MyFilesPageState extends State<MyFilesPage> {
   // Show text file content inside a dialog
   Future<void> openCloudFile(BuildContext context, String fileCode, String fileName) async {
     try {
+      setState(() {
+        isLoading = true;
+      });
       String downloadLink = await _getDownloadLink(fileCode);
       final response = await http.get(Uri.parse(downloadLink));
 
@@ -800,8 +803,14 @@ class _MyFilesPageState extends State<MyFilesPage> {
       } else {
         print("Failed to download file. Status Code: ${response.statusCode}");
       }
+      setState(() {
+        isLoading = false;
+      });
     } catch (e) {
       print("Error: $e");
+      setState(() {
+        isLoading = false;
+      });
     }
   }
 
@@ -2501,7 +2510,7 @@ class _UploadPageState extends State<UploadPage> {
                 itemCount: selectedFiles.length,
                 itemBuilder: (context, index) {
                   return ListTile(
-                    title: Text(selectedFiles[index]),
+                    title: Text(selectedFiles[index].split(r'\').last),
                   );
                 },
               ),
