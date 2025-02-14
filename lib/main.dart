@@ -476,6 +476,30 @@ class _MyFilesPageState extends State<MyFilesPage> {
       });
     }
 
+    Icon getFileIcon(String fileName) {
+      String extension = fileName.split('.').last.toLowerCase();
+      
+      switch (extension) {
+        case 'jpg':
+        case 'jpeg':
+        case 'png':
+        case 'gif':
+          return Icon(Icons.image, color: Colors.blue);
+        case 'mp3':
+        case 'wav':
+          return Icon(Icons.audiotrack, color: Colors.red);
+        case 'mp4':
+        case 'mov':
+          return Icon(Icons.videocam, color: Colors.green);
+        case 'txt':
+          return Icon(Icons.description, color: Colors.orange);
+        case 'pdf':
+          return Icon(Icons.picture_as_pdf, color: Colors.purple);
+        default:
+          return Icon(Icons.insert_drive_file, color: Colors.grey); // Default icon for unknown types
+      }
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: Text(selectionMode ? "${selectedItems.length} selected" : 'My Files'),
@@ -591,7 +615,16 @@ class _MyFilesPageState extends State<MyFilesPage> {
                               child: ListTile(
                                 leading: Stack(
                                   children: [
-                                    Image.network(file['thumbnail'], width: 40, height: 40, fit: BoxFit.cover),
+                                    Image.network(
+                                      file['thumbnail'], 
+                                      width: 40,
+                                      height: 40, 
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (BuildContext context, Object error, StackTrace? stackTrace) {
+                                        // Get the appropriate icon based on the file type
+                                        return getFileIcon(file['name']);
+                                      },
+                                    ),
                                     if (isSelected)
                                       Positioned.fill(
                                         child: Container(
