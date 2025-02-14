@@ -2323,11 +2323,19 @@ class _SyncPageState extends State<SyncPage> {
               itemBuilder: (context, index) {
                 final order = syncOrders[index];
                 return ListTile(
-                  title: Text(order.syncType),
+                  title: Text(
+                    order.syncType,
+                    overflow: TextOverflow.ellipsis, // Add this line
+                    maxLines: 1, // Ensure it only takes one line
+                  ),
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(abbreviate(order.localPath)),
+                      Text(
+                        abbreviate(order.localPath),
+                        overflow: TextOverflow.ellipsis, // Add this line
+                        maxLines: 1, // Ensure it only takes one line
+                      ),
                       SizedBox(width: 20),
                       Text("/${order.remotePath}"),
                       SizedBox(width: 20),
