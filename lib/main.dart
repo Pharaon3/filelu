@@ -354,7 +354,9 @@ class _MyFilesPageState extends State<MyFilesPage> {
   Future<String> getDownloadDirectory() async {
     String subpath = visitedFolderIDs.map((entry) => entry[1]).join('/');
     if (Platform.isAndroid) {
-      return "/storage/emulated/0/Download"; // Default download folder on Android
+      Directory? dir = await getExternalStorageDirectory(); // Default download folder on Android
+      String path = '${dir!.path}/FileLuSync/$subpath';
+      return path;
     } else if (Platform.isIOS) {
       Directory dir = await getApplicationDocumentsDirectory();
       return dir.path;
@@ -765,11 +767,11 @@ class _MyFilesPageState extends State<MyFilesPage> {
                   await downloadFolder(selectedItem['fld_id'], selectedItem['name']);
                 }
               }
-              setState(() {
-                selectedItems = [];
-                isLoading = false;
-              });
             }
+            setState(() {
+              selectedItems = [];
+              isLoading = false;
+            });
           },
           onRemove: () async {
             Navigator.pop(context);
@@ -951,6 +953,8 @@ class _MyFilesPageState extends State<MyFilesPage> {
     print("filePath");
     print(filePath);
     if (filePath == "") saveDirectory = await getDownloadDirectory();
+    print("saveDirectory");
+    print(saveDirectory);
     try {
       // Step 1: Get the download link
       String downloadLink = await _getDownloadLink(fileCode);
@@ -961,6 +965,7 @@ class _MyFilesPageState extends State<MyFilesPage> {
         if (!status.isGranted) {
           print("Storage permission denied");
           return;
+        } else {
         }
       }
 
@@ -968,15 +973,12 @@ class _MyFilesPageState extends State<MyFilesPage> {
       final response = await http.get(Uri.parse(downloadLink));
 
       if (response.statusCode == 200) {
-        // Step 4: Get the custom local directory (e.g., Downloads folder)
-        Directory directory = Directory(saveDirectory);
-        if (!await directory.exists()) {
-          await directory.create(recursive: true);
-        }
-
-        // Step 5: Save the file to the specified path
-        String filePath = '${directory.path}/$fileName';
+        String filePath = '$saveDirectory/$fileName';
         File file = File(filePath);
+        // Create directory if it doesn't exist
+        if (!await file.parent.exists()) {
+          await file.parent.create(recursive: true);
+        }
         await file.writeAsBytes(response.bodyBytes);
 
         print("Download complete! File saved at: $filePath");
@@ -2464,7 +2466,7 @@ class _UploadPageState extends State<UploadPage> {
   Future<void> timer() async {
     if (selectedFiles.isNotEmpty && isLoading == true) {
       setState(() {
-        uploadProgress = min(uploadProgress + 0.005, (uploadedItemCounts + 1) / selectedFiles.length);
+        uploadProgress = min(uploadProgress + 0.005, (uploadedItemCounts + 1) / selectedFiles.length - 0.05);
         uploadProgress = max(uploadProgress, uploadedItemCounts / selectedFiles.length);
       });
     }
@@ -2551,7 +2553,7 @@ class _UploadPageState extends State<UploadPage> {
                 itemCount: selectedFiles.length,
                 itemBuilder: (context, index) {
                   return ListTile(
-                    title: Text(selectedFiles[index].split(r'\').last),
+                    title: Text(selectedFiles[index].split(r'\').last.split('/').last),
                   );
                 },
               ),
@@ -2579,7 +2581,6 @@ class _UploadPageState extends State<UploadPage> {
 
 }
 
-// Video Player Screen
 class VideoPlayerScreen extends StatefulWidget {
   final File videoFile;
   VideoPlayerScreen({required this.videoFile});

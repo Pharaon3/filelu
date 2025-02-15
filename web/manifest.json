@@ -1,6 +1,6 @@
 {
-    "name": "filelu",
-    "short_name": "filelu",
+    "name": "filelusync",
+    "short_name": "filelusync",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
