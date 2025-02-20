@@ -754,29 +754,34 @@ class _MyFilesPageState extends State<MyFilesPage> {
             _copyFile(item, 2);            
           },
           onDownload: () async {
-            Navigator.pop(context);
+            final scaffoldMessenger = ScaffoldMessenger.of(context); // Store reference
+            Navigator.of(context, rootNavigator: true).pop(); // Close the modal
             setState(() {
               isLoading = true;
             });
             if (item != "") {
-              if(item.containsKey('file_code')) {
+              if (item.containsKey('file_code')) {
                 await downloadFile(item['file_code'], item['name'], "");
               } else {
                 await downloadFolder(item['fld_id'], item['name']);
               }
             } else {
               for (dynamic selectedItem in selectedItems) {
-                if(selectedItem.containsKey('file_code')) {
+                if (selectedItem.containsKey('file_code')) {
                   await downloadFile(selectedItem['file_code'], selectedItem['name'], "");
                 } else {
                   await downloadFolder(selectedItem['fld_id'], selectedItem['name']);
                 }
               }
             }
+            String downloadPath = await getDownloadDirectory();
             setState(() {
               selectedItems = [];
               isLoading = false;
             });
+            scaffoldMessenger.showSnackBar(
+              SnackBar(content: Text('File/Folder(s) are downloaded to $downloadPath'), duration: Duration(seconds: 10),),
+            );
           },
           onRemove: () async {
             Navigator.pop(context);
@@ -1011,13 +1016,13 @@ class _MyFilesPageState extends State<MyFilesPage> {
     if (fileFolders.containsKey('folders')) {
       dynamic folders = fileFolders['folders'];
       for (dynamic folder in folders) {
-        downloadFolder(folder['fld_id'], folder['name'], saveDirectory);
+        await downloadFolder(folder['fld_id'], folder['name'], saveDirectory);
       }
     }
     if (fileFolders.containsKey('files')) {
       dynamic files = fileFolders['files'];
       for (dynamic file in files) {
-        downloadFile(file['file_code'], file['name'], saveDirectory);
+        await downloadFile(file['file_code'], file['name'], saveDirectory);
       }
     }
   }
