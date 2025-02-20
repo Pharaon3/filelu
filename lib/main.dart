@@ -14,6 +14,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:local_auth/local_auth.dart';
 import 'package:intl/intl.dart';
 import 'dart:convert';
+import 'dart:isolate';
 
 void main() {
   runApp(MyApp());
@@ -286,6 +287,10 @@ class _MyFilesPageState extends State<MyFilesPage> {
   int numberOfImages = 0;
   int currentPage = 0;
   List<dynamic> selectedItems = [];
+  String errorMessage = "";
+  Isolate? _backgroundIsolate;
+  ReceivePort _receivePort = ReceivePort();
+  bool fromToday = false;
 
   @override
   void initState() {
@@ -1253,6 +1258,7 @@ class _MyFilesPageState extends State<MyFilesPage> {
                 title: Text("Auto Camera Roll Backup"),
                 trailing: Switch(
                   value: _autoCameraBackup,
+                  activeColor: Colors.blue, // Set the active color to blue
                   onChanged: (val) {
                     setState(() => _autoCameraBackup = val);
                     Navigator.pop(context);
@@ -1314,17 +1320,23 @@ class _MyFilesPageState extends State<MyFilesPage> {
           actions: [
             TextButton(
               onPressed: () {
-                _startBackup(fromToday: true);
+                setState(() {
+                  fromToday = true;
+                });
+                _startBackup();
                 Navigator.pop(context);
               },
-              child: Text("Today Only"),
+              child: Text("Today Only", style: TextStyle(color: Colors.blue)),
             ),
             TextButton(
               onPressed: () {
-                _startBackup(fromToday: false);
+                setState(() {
+                  fromToday = false;
+                });
+                _startBackup();
                 Navigator.pop(context);
               },
-              child: Text("From Beginning"),
+              child: Text("From Beginning", style: TextStyle(color: Colors.blue)),
             ),
           ],
         );
@@ -1418,6 +1430,8 @@ class _MyFilesPageState extends State<MyFilesPage> {
 
     if (value) {
       _showBackupOptions();
+    } else {
+      _stopBackgroundSync();
     }
   }
 
@@ -1428,9 +1442,18 @@ class _MyFilesPageState extends State<MyFilesPage> {
       // Use `Process.start` on Windows instead of `launchUrl`
       await Process.start('explorer.exe', [url]);
     } else {
+      // setState(() {
+      //   errorMessage += "NotWin...";
+      // });
       if (await canLaunchUrl(uri)) {
-        await launchUrl(uri, mode: LaunchMode.externalApplication);
+        // setState(() {
+        //   errorMessage += "Can Launch Url...";
+        // });
+        await launchUrl(uri, mode: LaunchMode.inAppWebView);
       } else {
+        // setState(() {
+        //   errorMessage += "❌ Could not open: $url...";
+        // });
         print("❌ Could not open: $url");
       }
     }
@@ -1438,7 +1461,7 @@ class _MyFilesPageState extends State<MyFilesPage> {
 
   Future<void> _enableAppLock() async {
     final localAuth = LocalAuthentication();
-    bool canAuthenticate = await localAuth.canCheckBiometrics || await localAuth.isDeviceSupported();
+      bool canAuthenticate = await localAuth.canCheckBiometrics || await localAuth.isDeviceSupported();
 
     if (canAuthenticate) {
       bool didAuthenticate = await localAuth.authenticate(
@@ -1450,7 +1473,7 @@ class _MyFilesPageState extends State<MyFilesPage> {
         // Save lock setting in SharedPreferences
         _saveSetting('appLock', true);
       }
-    } else {
+      } else {
       print("Biometric authentication not available");
     }
   }
@@ -1464,8 +1487,30 @@ class _MyFilesPageState extends State<MyFilesPage> {
     );
   }
 
-  Future<void> _startBackup({required bool fromToday}) async {
-    final directory = await _getCameraRollDirectory();
+  void _startBackup() async {
+    _uploadCameraFolder();
+    if (_backgroundIsolate != null) return;
+    ReceivePort newReceivePort = ReceivePort();
+    _backgroundIsolate = await Isolate.spawn(_fileWatcher, newReceivePort.sendPort);
+    newReceivePort.listen((message) async {
+      String detectedFilePath = message as String;
+      print("📂 New file detected in main isolate: $detectedFilePath");
+      FileUploader uploader = FileUploader(sessionId: widget.sessionId, serverUrl: uploadServer);
+      String fileCode = await uploader.uploadFile(detectedFilePath);
+      String cameraFolderID = await uploader.getFolderID("Camera", "0");
+      if (cameraFolderID == "") {
+        cameraFolderID = await uploader.createCloudFolder("Camera", "0");
+      }
+      await uploader.moveFile(fileCode, cameraFolderID);
+      // _uploadFile(detectedFilePath); // Call upload in main isolate
+    });
+
+    print("✅ Background Sync Started!");
+  }
+
+  Future<void> _uploadCameraFolder() async {
+    const String directoryPath = "/storage/emulated/0/DCIM/Camera";
+    final directory = Directory(directoryPath);
     if (directory == null) {
       print("Camera Roll folder not found");
       return;
@@ -1501,7 +1546,13 @@ class _MyFilesPageState extends State<MyFilesPage> {
 
     print("Backup completed: ${mediaFiles.length} files uploaded");
   }
-
+  
+  void _stopBackgroundSync() {
+    _backgroundIsolate?.kill(priority: Isolate.immediate);
+    _backgroundIsolate = null;
+    print("❌ Background Sync Stopped.");
+  }
+  
   Future<Directory?> _getCameraRollDirectory() async {
     if (Platform.isAndroid) {
       return Directory("/storage/emulated/0/DCIM/Camera");
@@ -1519,6 +1570,9 @@ class _MyFilesPageState extends State<MyFilesPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      // appBar: AppBar(
+      //   title: Text(errorMessage),
+      // ),
       body: _getPageContent(),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _selectedIndex,
@@ -1882,8 +1936,6 @@ class _SyncPageState extends State<SyncPage> {
   }
 
   Future<void> _performSync(SyncOrder order) async {
-    print("perform orders");
-    print(order);
     switch (order.syncType) {
       case "Upload Only":
         await _uploadFiles(order.localPath, order.fld_id);
@@ -2302,6 +2354,13 @@ class _SyncPageState extends State<SyncPage> {
         }
       }
     }
+    final response1 = await http.get(
+      Uri.parse('https://filelu.com/api/folder/create?parent_id=$parentFolderID&name=$folderName&sess_id=${widget.sessionId}'),
+    );
+    if (response1.statusCode == 200) {
+      var data = jsonDecode(response1.body);
+      return data['result']['fld_id'].toString();
+    }
     return "";
   }
 
@@ -2641,10 +2700,19 @@ class FileUploader {
 
   /// Upload file to server
   Future<String> uploadFile(String filePath) async {
+    print('trying to upload: $filePath');
     if (serverUrl == null) {
       print("No available upload server. Upload failed.");
       return "";
     }
+    // Check if the file exists
+    File file = File(filePath);
+    if (!await file.exists()) {
+      print("File does not exist: $filePath");
+      return "";
+    }
+    int fileSize = await file.length();
+    print("Uploading file of size: $fileSize bytes");
 
     try {
       var request = http.MultipartRequest('POST', Uri.parse(serverUrl!));
@@ -2703,4 +2771,21 @@ class FileUploader {
     return "";
   }
 
+}
+
+void _fileWatcher(SendPort sendPort) async {
+  const String directoryPath = "/storage/emulated/0/DCIM/Camera";
+  final directory = Directory(directoryPath);
+
+  if (!directory.existsSync()) {
+    print("❌ Camera folder not found!");
+    return;
+  }
+
+  directory.watch(events: FileSystemEvent.create).listen((event) async {
+    if (event.type == FileSystemEvent.create) {
+      print("📂 New file detected: ${event.path}");
+      sendPort.send(event.path); // Send file path to main isolate
+    }
+  });
 }
