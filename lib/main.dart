@@ -902,6 +902,7 @@ class _MyFilesPageState extends State<MyFilesPage> {
 
     showDialog(
       context: context,
+      barrierDismissible: true, // Makes the dialog dismissable by tapping outside
       builder: (context) {
         return AlertDialog(
           title: Text("Audio Player"),
@@ -924,7 +925,10 @@ class _MyFilesPageState extends State<MyFilesPage> {
           ],
         );
       },
-    );
+    ).then((value) {
+      // Ensure that audio is stopped when dialog is dismissed (by tapping outside)
+      audioPlayer.stop();
+    });
   }
 
   // Play video file
