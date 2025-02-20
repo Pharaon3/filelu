@@ -21,10 +21,75 @@ void main() {
 }
 
 class MyApp extends StatelessWidget {
-  
+
   Future<String?> getSessionId() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getString('sessionId');
+  }
+
+  Future<String?> _getSavedPassword() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString('appLockPassword');
+  }
+
+  Future<bool> _validatePassword(BuildContext context) async {
+    String? savedPassword = await _getSavedPassword();
+    
+    if (savedPassword == null || savedPassword.isEmpty) {
+      return true; // No password set, proceed normally.
+    }
+
+    return await showDialog<bool>(
+          context: context,
+          barrierDismissible: false, // Prevent dismissing by tapping outside.
+          builder: (context) {
+            TextEditingController passwordController = TextEditingController();
+            return AlertDialog(
+              title: Text("Enter App Lock Password"),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: passwordController,
+                    obscureText: true,
+                    decoration: InputDecoration(
+                      labelText: "Password",
+                      labelStyle: TextStyle(color: Colors.blue), // Change label color
+                      focusedBorder: UnderlineInputBorder(
+                        borderSide: BorderSide(color: Colors.blue, width: 2.0), // Border when focused
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    Navigator.pop(context, false); // Reject login
+                  },
+                  child: Text(
+                    "Cancel",
+                    style: TextStyle(color: Colors.blue),
+                  ),
+                ),
+                TextButton(
+                  onPressed: () {
+                    if (passwordController.text == savedPassword) {
+                      Navigator.pop(context, true); // Accept login
+                    } else {
+                      Navigator.pop(context, false); // Wrong password
+                    }
+                  },
+                  child: Text(
+                    "Unlock",
+                    style: TextStyle(color: Colors.blue),
+                  ),
+                ),
+              ],
+            );
+          },
+        ) ??
+        false; // Default to false if dialog is dismissed.
   }
 
   @override
@@ -38,9 +103,32 @@ class MyApp extends StatelessWidget {
         future: getSessionId(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return Scaffold(body: Center(child: CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(Colors.blue))));
+            return Scaffold(
+              body: Center(
+                child: CircularProgressIndicator(
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.blue),
+                ),
+              ),
+            );
           } else if (snapshot.hasData && snapshot.data != null && snapshot.data!.isNotEmpty) {
-            return MyFilesPage(sessionId: snapshot.data!);
+            return FutureBuilder<bool>(
+              future: _validatePassword(context),
+              builder: (context, passwordSnapshot) {
+                if (passwordSnapshot.connectionState == ConnectionState.waiting) {
+                  return Scaffold(
+                    body: Center(
+                      child: CircularProgressIndicator(
+                        valueColor: AlwaysStoppedAnimation<Color>(Colors.blue),
+                      ),
+                    ),
+                  );
+                } else if (passwordSnapshot.data == true) {
+                  return MyFilesPage(sessionId: snapshot.data!);
+                } else {
+                  return LoginPage();
+                }
+              },
+            );
           } else {
             return LoginPage();
           }
@@ -48,7 +136,6 @@ class MyApp extends StatelessWidget {
       ),
     );
   }
-
 }
 
 class LoginPage extends StatefulWidget {
@@ -1279,8 +1366,8 @@ class _MyFilesPageState extends State<MyFilesPage> {
               // Security Options
               ListTile(
                 leading: Icon(Icons.lock, color: Colors.blue),
-                title: Text("App Lock (Password/Face ID)"),
-                onTap: _enableAppLock,
+                title: Text("App Lock"),
+                onTap: () => _enableAppLock(context),
               ),
 
               ListTile(
@@ -1419,10 +1506,24 @@ class _MyFilesPageState extends State<MyFilesPage> {
     });
   }
 
-  Future<void> _saveSetting(String key, bool value) async {
-    final prefs = await SharedPreferences.getInstance();
+Future<void> _saveSetting(String key, dynamic value) async {
+  final prefs = await SharedPreferences.getInstance();
+
+  if (value is bool) {
     await prefs.setBool(key, value);
+  } else if (value is String) {
+    await prefs.setString(key, value);
+  } else if (value is int) {
+    await prefs.setInt(key, value);
+  } else if (value is double) {
+    await prefs.setDouble(key, value);
+  } else if (value is List<String>) {
+    await prefs.setStringList(key, value);
+  } else {
+    throw ArgumentError("Unsupported type for SharedPreferences");
   }
+}
+
 
   void _toggleWifiSync(bool value) {
     setState(() {
@@ -1468,23 +1569,81 @@ class _MyFilesPageState extends State<MyFilesPage> {
     }
   }
 
-  Future<void> _enableAppLock() async {
-    final localAuth = LocalAuthentication();
-      bool canAuthenticate = await localAuth.canCheckBiometrics || await localAuth.isDeviceSupported();
+  Future<void> _enableAppLock(BuildContext context) async {
+    String? password = await _getSavedPassword();
 
-    if (canAuthenticate) {
-      bool didAuthenticate = await localAuth.authenticate(
-        localizedReason: 'Please authenticate to enable App Lock',
-      );
-
-      if (didAuthenticate) {
-        print("App Lock Enabled");
-        // Save lock setting in SharedPreferences
-        _saveSetting('appLock', true);
+    if (password == null || password == "") {
+      // Prompt user to set a new password
+      String? newPassword = await _showPasswordDialog(context, "Set Password");
+      if (newPassword != null) {
+        String? confirmPassword = await _showPasswordDialog(context, "Retype Password");
+        
+        if (confirmPassword == newPassword) {
+          await _saveSetting('appLockPassword', newPassword);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text("App Lock Enabled Successfully"), duration: Duration(seconds: 3)),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text("Passwords do not match. Try again."), duration: Duration(seconds: 3)),
+          );
+        }
       }
+    } else {
+      String? enteredPassword = await _showPasswordDialog(context, "Enter Password to Unlock");
+      if (enteredPassword == password) {
+        await _saveSetting('appLockPassword', "");
       } else {
-      print("Biometric authentication not available");
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Incorrect Password"), duration: Duration(seconds: 3)),
+        );
+      }
     }
+  }
+
+  Future<String?> _showPasswordDialog(BuildContext context, String title) async {
+    TextEditingController passwordController = TextEditingController();
+    
+    return showDialog<String>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text(title),
+          content: TextField(
+            controller: passwordController,
+            obscureText: true,
+            decoration: InputDecoration(
+              labelText: "Enter Password",
+              labelStyle: TextStyle(color: Colors.blue), // Change label color
+              focusedBorder: UnderlineInputBorder(
+                borderSide: BorderSide(color: Colors.blue, width: 2.0), // Border when focused
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, null),
+              child: Text(
+                "Cancel",
+                style: TextStyle(color: Colors.blue),
+              ),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, passwordController.text),
+              child: Text(
+                "OK",
+                style: TextStyle(color: Colors.blue),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<String?> _getSavedPassword() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString('appLockPassword');
   }
 
   void _logout(BuildContext context) async {
