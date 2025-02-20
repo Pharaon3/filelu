@@ -1488,19 +1488,20 @@ class _MyFilesPageState extends State<MyFilesPage> {
   }
 
   void _startBackup() async {
-    _uploadCameraFolder();
+    FileUploader uploader = FileUploader(sessionId: widget.sessionId, serverUrl: uploadServer);
+    String cameraFolderID = await uploader.getFolderID("Camera", "0");
+      if (cameraFolderID == "") {
+        cameraFolderID = await uploader.createCloudFolder("Camera", "0");
+      }
+    _uploadCameraFolder(cameraFolderID);
     if (_backgroundIsolate != null) return;
     ReceivePort newReceivePort = ReceivePort();
     _backgroundIsolate = await Isolate.spawn(_fileWatcher, newReceivePort.sendPort);
     newReceivePort.listen((message) async {
       String detectedFilePath = message as String;
       print("📂 New file detected in main isolate: $detectedFilePath");
-      FileUploader uploader = FileUploader(sessionId: widget.sessionId, serverUrl: uploadServer);
+      await Future.delayed(Duration(seconds: 3));
       String fileCode = await uploader.uploadFile(detectedFilePath);
-      String cameraFolderID = await uploader.getFolderID("Camera", "0");
-      if (cameraFolderID == "") {
-        cameraFolderID = await uploader.createCloudFolder("Camera", "0");
-      }
       await uploader.moveFile(fileCode, cameraFolderID);
       // _uploadFile(detectedFilePath); // Call upload in main isolate
     });
@@ -1508,12 +1509,21 @@ class _MyFilesPageState extends State<MyFilesPage> {
     print("✅ Background Sync Started!");
   }
 
-  Future<void> _uploadCameraFolder() async {
+  Future<void> _uploadCameraFolder(String cameraFolderID) async {
     const String directoryPath = "/storage/emulated/0/DCIM/Camera";
+    List<String> cloudFiles = [];
     final directory = Directory(directoryPath);
     if (directory == null) {
       print("Camera Roll folder not found");
       return;
+    }
+    final response = await http.get(
+      Uri.parse('https://filelu.com/api/folder/list?fld_id=$cameraFolderID&sess_id=${widget.sessionId}'),
+    );
+
+    if (response.statusCode == 200) {
+      var data = jsonDecode(response.body);
+      cloudFiles = List<String>.from(data['result']['files'].map((file) => file['name']));
     }
 
     List<FileSystemEntity> mediaFiles = directory.listSync().where(
@@ -1534,14 +1544,16 @@ class _MyFilesPageState extends State<MyFilesPage> {
     }
 
     for (var file in mediaFiles) {
-      FileUploader uploader = FileUploader(sessionId: widget.sessionId, serverUrl: uploadServer);
-      String fileCode = await uploader.uploadFile(file.path);
-      String cameraFolderID = await uploader.getFolderID("Camera", "0");
-      if (cameraFolderID == "") {
-        cameraFolderID = await uploader.createCloudFolder("Camera", "0");
+      if (!cloudFiles.contains(file.path.split('/').last.split(r'\').last)){
+        FileUploader uploader = FileUploader(sessionId: widget.sessionId, serverUrl: uploadServer);
+        String fileCode = await uploader.uploadFile(file.path);
+        String cameraFolderID = await uploader.getFolderID("Camera", "0");
+        if (cameraFolderID == "") {
+          cameraFolderID = await uploader.createCloudFolder("Camera", "0");
+        }
+        await uploader.moveFile(fileCode, cameraFolderID);
+        // await _uploadFileToCloud(file.path);
       }
-      await uploader.moveFile(fileCode, cameraFolderID);
-      // await _uploadFileToCloud(file.path);
     }
 
     print("Backup completed: ${mediaFiles.length} files uploaded");
