@@ -40,62 +40,62 @@ class MyApp extends StatelessWidget {
     }
 
     return await showDialog<bool>(
-          context: context,
-          barrierDismissible: false, // Prevent dismissing by tapping outside.
-          builder: (context) {
-            TextEditingController passwordController = TextEditingController();
-            return AlertDialog(
-              title: Text("Enter App Lock Password"),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextField(
-                    controller: passwordController,
-                    obscureText: true,
-                    decoration: InputDecoration(
-                      labelText: "Password",
-                      labelStyle: TextStyle(color: Colors.blue), // Change label color
-                      focusedBorder: UnderlineInputBorder(
-                        borderSide: BorderSide(color: Colors.blue, width: 2.0), // Border when focused
-                      ),
-                    ),
+      context: context,
+      barrierDismissible: false, // Prevent dismissing by tapping outside.
+      builder: (context) {
+        TextEditingController passwordController = TextEditingController();
+        return AlertDialog(
+          title: Text("Enter App Lock Password"),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: passwordController,
+                obscureText: true,
+                decoration: InputDecoration(
+                  labelText: "Password",
+                  labelStyle: TextStyle(color: Colors.blue), // Change label color
+                  focusedBorder: UnderlineInputBorder(
+                    borderSide: BorderSide(color: Colors.blue, width: 2.0), // Border when focused
                   ),
-                ],
+                ),
               ),
-              actions: [
-                TextButton(
-                  onPressed: () {
-                    Navigator.pop(context, false); // Reject login
-                  },
-                  child: Text(
-                    "Cancel",
-                    style: TextStyle(color: Colors.blue),
-                  ),
-                ),
-                TextButton(
-                  onPressed: () {
-                    if (passwordController.text == savedPassword) {
-                      Navigator.pop(context, true); // Accept login
-                    } else {
-                      Navigator.pop(context, false); // Wrong password
-                    }
-                  },
-                  child: Text(
-                    "Unlock",
-                    style: TextStyle(color: Colors.blue),
-                  ),
-                ),
-              ],
-            );
-          },
-        ) ??
-        false; // Default to false if dialog is dismissed.
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context, false); // Reject login
+              },
+              child: Text(
+                "Cancel",
+                style: TextStyle(color: Colors.blue),
+              ),
+            ),
+            TextButton(
+              onPressed: () {
+                if (passwordController.text == savedPassword) {
+                  Navigator.pop(context, true); // Accept login
+                } else {
+                  Navigator.pop(context, false); // Wrong password
+                }
+              },
+              child: Text(
+                "Unlock",
+                style: TextStyle(color: Colors.blue),
+              ),
+            ),
+          ],
+        );
+      },
+    ) ??
+    false; // Default to false if dialog is dismissed.
   }
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'File Manager',
+      title: 'FileLu Sync',
       theme: ThemeData(
         primarySwatch: Colors.blue,
       ),
@@ -369,14 +369,12 @@ class _MyFilesPageState extends State<MyFilesPage> {
   bool isLoading = false;
   bool _onlyWifiSync = true;
   bool _autoCameraBackup = false;
-  String? _uploadServerURL; // Store URL globally
   String uploadServer = "";
   int numberOfImages = 0;
   int currentPage = 0;
   List<dynamic> selectedItems = [];
   String errorMessage = "";
   Isolate? _backgroundIsolate;
-  ReceivePort _receivePort = ReceivePort();
   bool fromToday = false;
 
   @override
@@ -960,7 +958,10 @@ class _MyFilesPageState extends State<MyFilesPage> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: Text("Close"),
+              child: Text(
+                "Close",
+                style: TextStyle(color: Colors.blue),
+              ),
             ),
           ],
         );
@@ -979,7 +980,10 @@ class _MyFilesPageState extends State<MyFilesPage> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: Text("Close"),
+              child: Text(
+                "Close",
+                style: TextStyle(color: Colors.blue),
+              ),
             ),
           ],
         );
@@ -1504,26 +1508,28 @@ class _MyFilesPageState extends State<MyFilesPage> {
       _onlyWifiSync = prefs.getBool('onlyWifiSync') ?? true;
       _autoCameraBackup = prefs.getBool('autoCameraBackup') ?? false;
     });
+    if (prefs.getBool('autoCameraBackup') == true) {
+      _startBackup();
+    }
   }
 
-Future<void> _saveSetting(String key, dynamic value) async {
-  final prefs = await SharedPreferences.getInstance();
+  Future<void> _saveSetting(String key, dynamic value) async {
+    final prefs = await SharedPreferences.getInstance();
 
-  if (value is bool) {
-    await prefs.setBool(key, value);
-  } else if (value is String) {
-    await prefs.setString(key, value);
-  } else if (value is int) {
-    await prefs.setInt(key, value);
-  } else if (value is double) {
-    await prefs.setDouble(key, value);
-  } else if (value is List<String>) {
-    await prefs.setStringList(key, value);
-  } else {
-    throw ArgumentError("Unsupported type for SharedPreferences");
+    if (value is bool) {
+      await prefs.setBool(key, value);
+    } else if (value is String) {
+      await prefs.setString(key, value);
+    } else if (value is int) {
+      await prefs.setInt(key, value);
+    } else if (value is double) {
+      await prefs.setDouble(key, value);
+    } else if (value is List<String>) {
+      await prefs.setStringList(key, value);
+    } else {
+      throw ArgumentError("Unsupported type for SharedPreferences");
+    }
   }
-}
-
 
   void _toggleWifiSync(bool value) {
     setState(() {
@@ -1677,7 +1683,22 @@ Future<void> _saveSetting(String key, dynamic value) async {
     print("✅ Background Sync Started!");
   }
 
+  Future<bool> _requestStoragePermission() async {
+    if (await Permission.storage.request().isGranted) {
+      return true;
+    }
+    if (await Permission.manageExternalStorage.request().isGranted) {
+      return true;
+    }
+    return false;
+  }
+
   Future<void> _uploadCameraFolder(String cameraFolderID) async {
+    bool hasPermission = await _requestStoragePermission();
+    if (!hasPermission) {
+      print("❌ Storage permission denied");
+      return;
+    }
     const String directoryPath = "/storage/emulated/0/DCIM/Camera";
     List<String> cloudFiles = [];
     final directory = Directory(directoryPath);
@@ -1907,6 +1928,7 @@ class _SyncPageState extends State<SyncPage> {
   dynamic syncedFileFolders = {};
   final String sessionId;
   bool isLoading = false;
+  Isolate? _backgroundIsolate;
 
   _SyncPageState({required this.sessionId});
 
@@ -1915,6 +1937,58 @@ class _SyncPageState extends State<SyncPage> {
     super.initState();
     _loadSyncOrders(); 
     _initializeServerUrl();
+    _runPerformSync();
+    _watchFileCDM();
+  }
+
+Future<void> _watchFileCDM() async {
+  if (_backgroundIsolate != null) return;
+
+  ReceivePort newReceivePort = ReceivePort();
+  _backgroundIsolate = await Isolate.spawn(_filefolderWatcher, newReceivePort.sendPort);
+
+  newReceivePort.listen((message) async {
+    if (message is Map<String, dynamic>) {
+      String eventType = message['event']; // "create", "delete", "modify", "move"
+      String detectedFilePath = message['path'];
+
+      // Optional delay before handling the event
+      await Future.delayed(Duration(seconds: 3));
+
+      // Handle file/folder event based on type
+      switch (eventType) {
+        case 'create':
+          print("📥 File Created: $detectedFilePath");
+          // TODO: Upload file or perform necessary actions
+          break;
+        case 'delete':
+          print("🗑️ File Deleted: $detectedFilePath");
+          // TODO: Handle file deletion
+          break;
+        case 'modify':
+          print("✏️ File Modified: $detectedFilePath");
+          // TODO: Handle file modification
+          break;
+        case 'move':
+          print("🔄 File Moved: $detectedFilePath");
+          // TODO: Handle file move
+          break;
+        default:
+          print("⚠️ Unknown event detected: $eventType");
+      }
+    }
+  });
+}
+
+
+  Future<void> _runPerformSync() async {
+    for (int index= 0; index < syncOrders.length; index ++) {
+      if (syncOrders[index].isRunning) {
+        await _performSync(syncOrders[index]);
+      }
+    }
+    await Future.delayed(Duration(seconds: 20)); // Run every 10 seconds
+    _runPerformSync();
   }
 
   Future<void> _initializeServerUrl() async {
@@ -2007,10 +2081,6 @@ class _SyncPageState extends State<SyncPage> {
       syncOrders[index].isRunning = !syncOrders[index].isRunning;
     });
     _saveSyncOrders();
-    while (syncOrders[index].isRunning) {
-      await _performSync(syncOrders[index]);
-      await Future.delayed(Duration(seconds: 10)); // Run every 10 seconds
-    }
   }
 
   /// Show Add Sync Order Popup
@@ -2969,3 +3039,66 @@ void _fileWatcher(SendPort sendPort) async {
     }
   });
 }
+
+void _filefolderWatcher(SendPort sendPort) async {
+  const String directoryPath = "/storage/emulated/0/";
+  final directory = Directory(directoryPath);
+
+  if (!directory.existsSync()) {
+    print("❌ Directory not found!");
+    return;
+  }
+
+  // Function to recursively watch subdirectories
+  void watchSubdirectories(Directory dir) {
+    try{
+      dir.list(recursive: false, followLinks: false).listen((FileSystemEntity entity) {
+        if (entity is Directory) {
+          if (entity.path.split('/').last == "DCIM1") return;
+          if (entity.path.split('/').last == "Android") return;
+          // Watch the subdirectory
+          entity.watch(events: FileSystemEvent.all).listen((event) {
+            if (event.type == FileSystemEvent.create) {
+              print("📂 File/Folder Created: ${event.path}");
+              sendPort.send({'event': 'create', 'path': event.path});
+            } else if (event.type == FileSystemEvent.delete) {
+              print("🗑️ File/Folder Deleted: ${event.path}");
+              sendPort.send({'event': 'delete', 'path': event.path});
+            } else if (event.type == FileSystemEvent.modify) {
+              print("✏️ File/Folder Modified: ${event.path}");
+              sendPort.send({'event': 'modify', 'path': event.path});
+            } else if (event.type == FileSystemEvent.move) {
+              print("🔄 File/Folder Moved: ${event.path}");
+              sendPort.send({'event': 'move', 'path': event.path});
+            }
+          });
+          watchSubdirectories(entity);
+        }
+      });
+    } catch (e) {
+      print('Error while watching subdirectory $dir: $e');
+    }
+    
+  }
+
+  // Watch the main directory
+  directory.watch(events: FileSystemEvent.all).listen((event) {
+    if (event.type == FileSystemEvent.create) {
+      print("📂 File/Folder Created: ${event.path}");
+      sendPort.send({'event': 'create', 'path': event.path});
+    } else if (event.type == FileSystemEvent.delete) {
+      print("🗑️ File/Folder Deleted: ${event.path}");
+      sendPort.send({'event': 'delete', 'path': event.path});
+    } else if (event.type == FileSystemEvent.modify) {
+      print("✏️ File/Folder Modified: ${event.path}");
+      sendPort.send({'event': 'modify', 'path': event.path});
+    } else if (event.type == FileSystemEvent.move) {
+      print("🔄 File/Folder Moved: ${event.path}");
+      sendPort.send({'event': 'move', 'path': event.path});
+    }
+  });
+
+  // Watch the subdirectories
+  watchSubdirectories(directory);
+}
+
