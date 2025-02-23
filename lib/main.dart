@@ -442,10 +442,17 @@ class _MyFilesPageState extends State<MyFilesPage> {
   }
 
   Future<String> getDownloadDirectory() async {
-    String subpath = visitedFolderIDs.map((entry) => entry[1]).join('/');
+    String subpath = visitedFolderIDs
+      .map((entry) => entry[1])
+      .where((path) => path.isNotEmpty)
+      .join('/');
+    subpath = subpath.replaceAll(RegExp(r'/{2,}'), '/');
+    if (subpath.endsWith('/')) {
+      subpath = subpath.substring(0, subpath.length - 1);
+    }
     if (Platform.isAndroid) {
-      Directory? dir = await getExternalStorageDirectory(); // Default download folder on Android
-      String path = '${dir!.path}/FileLuSync/$subpath';
+      // Directory? dir = await getExternalStorageDirectory(); // Default download folder on Android
+      String path = '/storage/emulated/0/Download/FileLuSync/$subpath';
       return path;
     } else if (Platform.isIOS) {
       Directory dir = await getApplicationDocumentsDirectory();
@@ -1061,10 +1068,7 @@ class _MyFilesPageState extends State<MyFilesPage> {
     print("saveDirectory");
     print(saveDirectory);
     try {
-      // Step 1: Get the download link
       String downloadLink = await _getDownloadLink(fileCode);
-
-      // Step 2: Request storage permission (for Android)
       if (Platform.isAndroid) {
         var status = await Permission.storage.request();
         if (!status.isGranted) {
@@ -1073,19 +1077,14 @@ class _MyFilesPageState extends State<MyFilesPage> {
         } else {
         }
       }
-
-      // Step 3: Get the file from the server
       final response = await http.get(Uri.parse(downloadLink));
-
       if (response.statusCode == 200) {
         String filePath = '$saveDirectory/$fileName';
         File file = File(filePath);
-        // Create directory if it doesn't exist
         if (!await file.parent.exists()) {
           await file.parent.create(recursive: true);
         }
         await file.writeAsBytes(response.bodyBytes);
-
         print("Download complete! File saved at: $filePath");
       } else {
         print("Download failed. Server response: ${response.statusCode}");
@@ -2186,6 +2185,7 @@ Future<void> _watchFileCDM() async {
   }
 
   Future<void> _performSync(SyncOrder order) async {
+    print(order.syncType);
     switch (order.syncType) {
       case "Upload Only":
         await _uploadFiles(order.localPath, order.fld_id);
