@@ -1940,54 +1940,54 @@ class _SyncPageState extends State<SyncPage> {
     _watchFileCDM();
   }
 
-Future<void> _watchFileCDM() async {
-  if (_backgroundIsolate != null) return;
+  Future<void> _watchFileCDM() async {
+    if (_backgroundIsolate != null) return;
 
-  ReceivePort newReceivePort = ReceivePort();
-  _backgroundIsolate = await Isolate.spawn(_filefolderWatcher, newReceivePort.sendPort);
+    ReceivePort newReceivePort = ReceivePort();
+    _backgroundIsolate = await Isolate.spawn(_filefolderWatcher, newReceivePort.sendPort);
 
-  newReceivePort.listen((message) async {
-    if (message is Map<String, dynamic>) {
-      String eventType = message['event']; // "create", "delete", "modify", "move"
-      String detectedFilePath = message['path'];
+    newReceivePort.listen((message) async {
+      if (message is Map<String, dynamic>) {
+        String eventType = message['event']; // "create", "delete", "modify", "move"
+        String detectedFilePath = message['path'];
 
-      // Optional delay before handling the event
-      await Future.delayed(Duration(seconds: 3));
+        // Optional delay before handling the event
+        await Future.delayed(Duration(seconds: 3));
 
-      // Handle file/folder event based on type
-      switch (eventType) {
-        case 'create':
-          print("📥 File Created: $detectedFilePath");
-          // TODO: Upload file or perform necessary actions
-          break;
-        case 'delete':
-          print("🗑️ File Deleted: $detectedFilePath");
-          // TODO: Handle file deletion
-          break;
-        case 'modify':
-          print("✏️ File Modified: $detectedFilePath");
-          // TODO: Handle file modification
-          break;
-        case 'move':
-          print("🔄 File Moved: $detectedFilePath");
-          // TODO: Handle file move
-          break;
-        default:
-          print("⚠️ Unknown event detected: $eventType");
+        // Handle file/folder event based on type
+        switch (eventType) {
+          case 'create':
+            print("📥 File Created: $detectedFilePath");
+            // TODO: Upload file or perform necessary actions
+            break;
+          case 'delete':
+            print("🗑️ File Deleted: $detectedFilePath");
+            // TODO: Handle file deletion
+            break;
+          case 'modify':
+            print("✏️ File Modified: $detectedFilePath");
+            // TODO: Handle file modification
+            break;
+          case 'move':
+            print("🔄 File Moved: $detectedFilePath");
+            // TODO: Handle file move
+            break;
+          default:
+            print("⚠️ Unknown event detected: $eventType");
+        }
       }
-    }
-  });
-}
-
+    });
+  }
 
   Future<void> _runPerformSync() async {
+    print(syncOrders);
     for (int index= 0; index < syncOrders.length; index ++) {
       if (syncOrders[index].isRunning) {
         await _performSync(syncOrders[index]);
       }
     }
     await Future.delayed(Duration(seconds: 20)); // Run every 10 seconds
-    _runPerformSync();
+    await _runPerformSync();
   }
 
   Future<void> _initializeServerUrl() async {
@@ -2095,58 +2095,60 @@ Future<void> _watchFileCDM() async {
           builder: (context, setState) { // Add StatefulBuilder here
             return AlertDialog(
               title: Text("Add Sync Order"),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Folder path input
-                  TextField(
-                    controller: folderController,
-                    decoration: InputDecoration(
-                      labelText: "Local Folder Path",
-                      labelStyle: TextStyle(color: Colors.blue), // Change label color
-                      focusedBorder: UnderlineInputBorder(
-                        borderSide: BorderSide(color: Colors.blue, width: 2.0), // Border when focused
+              content: SingleChildScrollView( // Fix overflow issue
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Folder path input
+                    TextField(
+                      controller: folderController,
+                      decoration: InputDecoration(
+                        labelText: "Local Folder Path",
+                        labelStyle: TextStyle(color: Colors.blue), // Change label color
+                        focusedBorder: UnderlineInputBorder(
+                          borderSide: BorderSide(color: Colors.blue, width: 2.0), // Border when focused
+                        ),
+                        suffixIcon: IconButton(
+                          icon: Icon(Icons.folder, color: Colors.blue),
+                          onPressed: () async {
+                            String? selectedFolder = await _pickFolder();
+                            if (selectedFolder != null) {
+                              folderController.text = selectedFolder;
+                            }
+                          },
+                        ),
                       ),
-                      suffixIcon: IconButton(
-                        icon: Icon(Icons.folder, color: Colors.blue),
-                        onPressed: () async {
-                          String? selectedFolder = await _pickFolder();
-                          if (selectedFolder != null) {
-                            folderController.text = selectedFolder;
-                          }
-                        },
-                      ),
+                      readOnly: true,
                     ),
-                    readOnly: true,
-                  ),
-                  SizedBox(height: 10),
-                  TextField(
-                    decoration: InputDecoration(
-                      labelText: "Remote Folder",
-                      labelStyle: TextStyle(color: Colors.blue), // Change label color
-                      focusedBorder: UnderlineInputBorder(
-                        borderSide: BorderSide(color: Colors.blue, width: 2.0), // Border when focused
+                    SizedBox(height: 10),
+                    TextField(
+                      decoration: InputDecoration(
+                        labelText: "Remote Folder",
+                        labelStyle: TextStyle(color: Colors.blue), // Change label color
+                        focusedBorder: UnderlineInputBorder(
+                          borderSide: BorderSide(color: Colors.blue, width: 2.0), // Border when focused
+                        ),
                       ),
+                      onChanged: (value) => remotePath = value,
                     ),
-                    onChanged: (value) => remotePath = value,
-                  ),
-                  SizedBox(height: 10),
-                  // Sync type dropdown
-                  DropdownButton<String>(
-                    value: selectedType,
-                    onChanged: (value) {
-                      setState(() => selectedType = value!); // Use local setState
-                    },
-                    items: [
-                      "Upload Only",
-                      "Download Only",
-                      "One-Way Sync",
-                      "Two-Way Sync"
-                    ].map((type) {
-                      return DropdownMenuItem(value: type, child: Text(type));
-                    }).toList(),
-                  ),
-                ],
+                    SizedBox(height: 10),
+                    // Sync type dropdown
+                    DropdownButton<String>(
+                      value: selectedType,
+                      onChanged: (value) {
+                        setState(() => selectedType = value!); // Use local setState
+                      },
+                      items: [
+                        "Upload Only",
+                        "Download Only",
+                        "One-Way Sync",
+                        "Two-Way Sync"
+                      ].map((type) {
+                        return DropdownMenuItem(value: type, child: Text(type));
+                      }).toList(),
+                    ),
+                  ],
+                ),
               ),
               actions: [
                 TextButton(
@@ -2389,14 +2391,14 @@ Future<void> _watchFileCDM() async {
     List<String> syncFolderCodes = [];
 
     if (folderData == {} || folderData == null || folderData == "") {
-      _uploadFiles(localPath, folderID);
-      _downloadFiles(localPath, folderID);
+      await _uploadFiles(localPath, folderID);
+      await _downloadFiles(localPath, folderID);
       return;
     }
 
     if (!folderData.containsKey('file') && !folderData.containsKey('folder')) {
-      _uploadFiles(localPath, folderID);
-      _downloadFiles(localPath, folderID);
+      await _uploadFiles(localPath, folderID);
+      await _downloadFiles(localPath, folderID);
       return;
     }
 
