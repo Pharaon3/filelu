@@ -874,6 +874,7 @@ class _MyFilesPageState extends State<MyFilesPage> {
               selectedItems = [];
               isLoading = false;
             });
+            downloadPath = downloadPath.replaceAll("/storage/emulated/0", "");
             scaffoldMessenger.showSnackBar(
               SnackBar(content: Text('File/Folder(s) are downloaded to $downloadPath'), duration: Duration(seconds: 10),),
             );
