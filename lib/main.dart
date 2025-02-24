@@ -17,6 +17,7 @@ const String baseURL = "https://filelu.com/api";
 
 void main() {
   runApp(MyApp());
+
 }
 
 class MyApp extends StatelessWidget {
@@ -600,7 +601,9 @@ class _MyFilesPageState extends State<MyFilesPage> {
     }
 
     return Scaffold(
+      backgroundColor: Colors.white,
       appBar: AppBar(
+        backgroundColor: Colors.white,
         title: Text(selectionMode ? "${selectedItems.length} selected" : 'My Files'),
         leading: IconButton(
           icon: Icon(selectionMode ? Icons.close : Icons.arrow_back, color: Colors.blue,),
@@ -1784,11 +1787,9 @@ class _MyFilesPageState extends State<MyFilesPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // appBar: AppBar(
-      //   title: Text(errorMessage),
-      // ),
       body: _getPageContent(),
       bottomNavigationBar: BottomNavigationBar(
+        backgroundColor: Colors.white,
         currentIndex: _selectedIndex,
         selectedItemColor: Colors.blue,
         onTap: _onItemTapped,
@@ -2677,7 +2678,11 @@ class _SyncPageState extends State<SyncPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('Sync Files & Folders')),
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        title: Text('Sync Files & Folders')
+      ),
       floatingActionButton: FloatingActionButton(
         onPressed: _showAddSyncOrderDialog,
         backgroundColor: Colors.blue,
@@ -2707,7 +2712,7 @@ class _SyncPageState extends State<SyncPage> {
                         Icon(
                           order.syncType == "Upload Only" ? Icons.upload : 
                           order.syncType == "Download Only" ? Icons.download : 
-                          order.syncType == "One-Way Sync" ? Icons.sync_rounded : 
+                          order.syncType == "One-Way Sync" ? Icons.arrow_forward_ios : 
                           order.syncType == "Two-Way Sync" ? Icons.sync : 
                           Icons.info, // Default icon if neither condition matches
                           color: Colors.blue,
@@ -2748,7 +2753,6 @@ class _SyncPageState extends State<SyncPage> {
                     ),
                   ),
                 );
-
               },
             ),
           ),
@@ -2894,7 +2898,11 @@ class _UploadPageState extends State<UploadPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('Upload Files')),
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        title: Text('Upload Files')
+      ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
