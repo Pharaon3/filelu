@@ -375,6 +375,7 @@ class _MyFilesPageState extends State<MyFilesPage> {
   String errorMessage = "";
   Isolate? _backgroundIsolate;
   bool fromToday = false;
+  DateTime lastBackupDate = DateTime.now();
 
   @override
   void initState() {
@@ -1509,6 +1510,9 @@ class _MyFilesPageState extends State<MyFilesPage> {
     if (prefs.getBool('autoCameraBackup') == true) {
       _startBackup();
     }
+    if (prefs.getString('last_backup_date') != "") {
+      print("last_backup_date: ${prefs.getString('last_backup_date')}");
+    }
   }
 
   Future<void> _saveSetting(String key, dynamic value) async {
@@ -1524,6 +1528,8 @@ class _MyFilesPageState extends State<MyFilesPage> {
       await prefs.setDouble(key, value);
     } else if (value is List<String>) {
       await prefs.setStringList(key, value);
+    } else if (value is DateTime) {
+      await prefs.setString(key, value.toString());
     } else {
       throw ArgumentError("Unsupported type for SharedPreferences");
     }
@@ -1748,6 +1754,8 @@ class _MyFilesPageState extends State<MyFilesPage> {
           cameraFolderID = await uploader.createCloudFolder("Camera", "0");
         }
         await uploader.uploadFile(file.path, cameraFolderID);
+        lastBackupDate = DateTime.now();
+        _saveSetting("last_backup_date", lastBackupDate);
       }
     }
     print("Backup completed: ${mediaFiles.length} files uploaded");
