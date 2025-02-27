@@ -13,15 +13,13 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:intl/intl.dart';
 import 'dart:isolate';
 
-const String baseURL = "https://filelu.com/api";
+const String baseURL = "https://filelu.com/app";
 
 void main() {
   runApp(MyApp());
-
 }
 
 class MyApp extends StatelessWidget {
-
   Future<String?> getSessionId() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getString('sessionId');
@@ -34,71 +32,68 @@ class MyApp extends StatelessWidget {
 
   Future<bool> _validatePassword(BuildContext context) async {
     String? savedPassword = await _getSavedPassword();
-    
+
     if (savedPassword == null || savedPassword.isEmpty) {
       return true; // No password set, proceed normally.
     }
 
     return await showDialog<bool>(
-      context: context,
-      barrierDismissible: false, // Prevent dismissing by tapping outside.
-      builder: (context) {
-        TextEditingController passwordController = TextEditingController();
-        return AlertDialog(
-          title: Text("Enter App Lock Password"),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: passwordController,
-                obscureText: true,
-                decoration: InputDecoration(
-                  labelText: "Password",
-                  labelStyle: TextStyle(color: Colors.blue), // Change label color
-                  focusedBorder: UnderlineInputBorder(
-                    borderSide: BorderSide(color: Colors.blue, width: 2.0), // Border when focused
+          context: context,
+          barrierDismissible: false, // Prevent dismissing by tapping outside.
+          builder: (context) {
+            TextEditingController passwordController = TextEditingController();
+            return AlertDialog(
+              title: Text("Enter App Lock Password"),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: passwordController,
+                    obscureText: true,
+                    decoration: InputDecoration(
+                      labelText: "Password",
+                      labelStyle: TextStyle(
+                        color: Colors.blue,
+                      ), // Change label color
+                      focusedBorder: UnderlineInputBorder(
+                        borderSide: BorderSide(
+                          color: Colors.blue,
+                          width: 2.0,
+                        ), // Border when focused
+                      ),
+                    ),
                   ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    Navigator.pop(context, false); // Reject login
+                  },
+                  child: Text("Cancel", style: TextStyle(color: Colors.blue)),
                 ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.pop(context, false); // Reject login
-              },
-              child: Text(
-                "Cancel",
-                style: TextStyle(color: Colors.blue),
-              ),
-            ),
-            TextButton(
-              onPressed: () {
-                if (passwordController.text == savedPassword) {
-                  Navigator.pop(context, true); // Accept login
-                } else {
-                  Navigator.pop(context, false); // Wrong password
-                }
-              },
-              child: Text(
-                "Unlock",
-                style: TextStyle(color: Colors.blue),
-              ),
-            ),
-          ],
-        );
-      },
-    ) ??
-    false; // Default to false if dialog is dismissed.
+                TextButton(
+                  onPressed: () {
+                    if (passwordController.text == savedPassword) {
+                      Navigator.pop(context, true); // Accept login
+                    } else {
+                      Navigator.pop(context, false); // Wrong password
+                    }
+                  },
+                  child: Text("Unlock", style: TextStyle(color: Colors.blue)),
+                ),
+              ],
+            );
+          },
+        ) ??
+        false; // Default to false if dialog is dismissed.
   }
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'FileLu Sync',
-      theme: ThemeData(
-        primarySwatch: Colors.blue,
-      ),
+      theme: ThemeData(primarySwatch: Colors.blue),
       home: FutureBuilder<String?>(
         future: getSessionId(),
         builder: (context, snapshot) {
@@ -110,11 +105,14 @@ class MyApp extends StatelessWidget {
                 ),
               ),
             );
-          } else if (snapshot.hasData && snapshot.data != null && snapshot.data!.isNotEmpty) {
+          } else if (snapshot.hasData &&
+              snapshot.data != null &&
+              snapshot.data!.isNotEmpty) {
             return FutureBuilder<bool>(
               future: _validatePassword(context),
               builder: (context, passwordSnapshot) {
-                if (passwordSnapshot.connectionState == ConnectionState.waiting) {
+                if (passwordSnapshot.connectionState ==
+                    ConnectionState.waiting) {
                   return Scaffold(
                     body: Center(
                       child: CircularProgressIndicator(
@@ -154,7 +152,9 @@ class _LoginPageState extends State<LoginPage> {
     setState(() {
       isLoading = true;
     });
-    final response = await http.get(Uri.parse('$baseURL/session/request?email=$email'));
+    final response = await http.get(
+      Uri.parse('$baseURL/session/request?email=$email'),
+    );
 
     if (response.statusCode == 200) {
       var data = jsonDecode(response.body);
@@ -181,95 +181,143 @@ class _LoginPageState extends State<LoginPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: Text('Login')),
-      body: isLoading
-            ? Center(child: CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(Colors.blue)),) // Show loading indicator
-            : Center( // Centers the entire form
-        child: SingleChildScrollView( // Prevents overflow on small screens
-          child: Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: ConstrainedBox( // Sets a max width to avoid stretching on large screens
-              constraints: BoxConstraints(maxWidth: 400),
-              child: Column(
-                mainAxisSize: MainAxisSize.min, // Prevents unnecessary expansion
-                children: [
-                  if (!isOtpPage)
-                    Column(
-                      children: [
-                        TextField(
-                          controller: _emailController,
-                          decoration: InputDecoration(
-                            labelText: 'Email',
-                            labelStyle: TextStyle(color: Colors.blue), // Change label color
-                            focusedBorder: UnderlineInputBorder(
-                              borderSide: BorderSide(color: Colors.blue, width: 2.0), // Border when focused
-                            ),
-                          ),
-                        ),
+      body:
+          isLoading
+              ? Center(
+                child: CircularProgressIndicator(
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.blue),
+                ),
+              ) // Show loading indicator
+              : Center(
+                // Centers the entire form
+                child: SingleChildScrollView(
+                  // Prevents overflow on small screens
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: ConstrainedBox(
+                      // Sets a max width to avoid stretching on large screens
+                      constraints: BoxConstraints(maxWidth: 400),
+                      child: Column(
+                        mainAxisSize:
+                            MainAxisSize.min, // Prevents unnecessary expansion
+                        children: [
+                          if (!isOtpPage)
+                            Column(
+                              children: [
+                                TextField(
+                                  controller: _emailController,
+                                  decoration: InputDecoration(
+                                    labelText: 'Email',
+                                    labelStyle: TextStyle(
+                                      color: Colors.blue,
+                                    ), // Change label color
+                                    focusedBorder: UnderlineInputBorder(
+                                      borderSide: BorderSide(
+                                        color: Colors.blue,
+                                        width: 2.0,
+                                      ), // Border when focused
+                                    ),
+                                  ),
+                                ),
 
-                        SizedBox(height: 30),
-                        if (noEmail)
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: TextButton(
-                            onPressed: () async {
-                              final Uri url = Uri.parse("https://filelu.com/forgot_pass");
-                              if (await canLaunchUrl(url)) {
-                                await launchUrl(url, mode: LaunchMode.externalApplication);
-                              } else {
-                                print("Could not launch Forgot Password link");
-                              }
-                            },
-                            child: Text("Forgot Password?", style: TextStyle(color: Colors.blue)),
-                          ),
-                        ),
-                        SizedBox(height: 30),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            ElevatedButton(
-                              onPressed: () {
-                                if (_emailController.text.isNotEmpty) {
-                                  _getRequestToken(_emailController.text);
-                                } else {
-                                  print('Email cannot be empty');
-                                }
-                              },
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.blue, // Set background color to blue
-                              ), // Disable button while uploading
-                              child: Text(
-                                'Get OTP',
-                                style: TextStyle(color: Colors.white),
+                                SizedBox(height: 30),
+                                if (noEmail)
+                                  Align(
+                                    alignment: Alignment.centerRight,
+                                    child: TextButton(
+                                      onPressed: () async {
+                                        final Uri url = Uri.parse(
+                                          "https://filelu.com/forgot_pass",
+                                        );
+                                        if (await canLaunchUrl(url)) {
+                                          await launchUrl(
+                                            url,
+                                            mode:
+                                                LaunchMode.externalApplication,
+                                          );
+                                        } else {
+                                          print(
+                                            "Could not launch Forgot Password link",
+                                          );
+                                        }
+                                      },
+                                      child: Text(
+                                        "Forgot Password?",
+                                        style: TextStyle(color: Colors.blue),
+                                      ),
+                                    ),
+                                  ),
+                                SizedBox(height: 30),
+                                Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    ElevatedButton(
+                                      onPressed: () {
+                                        if (_emailController.text.isNotEmpty) {
+                                          _getRequestToken(
+                                            _emailController.text,
+                                          );
+                                        } else {
+                                          print('Email cannot be empty');
+                                        }
+                                      },
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor:
+                                            Colors
+                                                .blue, // Set background color to blue
+                                      ), // Disable button while uploading
+                                      child: Text(
+                                        'Get OTP',
+                                        style: TextStyle(color: Colors.white),
+                                      ),
+                                    ),
+                                    ElevatedButton(
+                                      onPressed: () async {
+                                        final Uri url = Uri.parse(
+                                          "https://filelu.com/register/",
+                                        );
+                                        if (await canLaunchUrl(url)) {
+                                          await launchUrl(
+                                            url,
+                                            mode:
+                                                LaunchMode.externalApplication,
+                                          );
+                                        } else {
+                                          print(
+                                            "Could not launch Sign Up link",
+                                          );
+                                        }
+                                      },
+                                      child: Text(
+                                        "Sign Up",
+                                        style: TextStyle(color: Colors.blue),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          if (isOtpPage && requestToken != null)
+                            OtpPage(
+                              requestToken: requestToken!,
+                            ), // Pass non-null requestToken here
+                          if (isOtpPage && requestToken == null)
+                            Center(
+                              child: CircularProgressIndicator(
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  Colors.blue,
+                                ),
                               ),
-                            ),
-                            ElevatedButton(
-                              onPressed: () async {
-                                final Uri url = Uri.parse("https://filelu.com/register/");
-                                if (await canLaunchUrl(url)) {
-                                  await launchUrl(url, mode: LaunchMode.externalApplication);
-                                } else {
-                                  print("Could not launch Sign Up link");
-                                }
-                              },
-                              child: Text("Sign Up", style: TextStyle(color: Colors.blue)),
-                            ),
-                          ],
-                        ),
-                      ],
+                            ), // Show loading until requestToken is available
+                        ],
+                      ),
                     ),
-                  if (isOtpPage && requestToken != null)
-                    OtpPage(requestToken: requestToken!), // Pass non-null requestToken here
-                  if (isOtpPage && requestToken == null)
-                    Center(child: CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(Colors.blue))), // Show loading until requestToken is available
-                ],
+                  ),
+                ),
               ),
-            ),
-          ),
-        ),
-      ),
     );
   }
-
 }
 
 class OtpPage extends StatefulWidget {
@@ -291,8 +339,11 @@ class _OtpPageState extends State<OtpPage> {
   void _startSession(String otp) async {
     // Ensure requestToken is not null before making the API call
     if (widget.requestToken.isNotEmpty && otp.isNotEmpty) {
-      final response = await http.get(Uri.parse(
-          '$baseURL/session/start?request_token=${widget.requestToken}&otp=$otp'));
+      final response = await http.get(
+        Uri.parse(
+          '$baseURL/session/start?request_token=${widget.requestToken}&otp=$otp',
+        ),
+      );
       if (response.statusCode == 200) {
         var data = jsonDecode(response.body);
         String sessionId = "";
@@ -304,7 +355,9 @@ class _OtpPageState extends State<OtpPage> {
         setSessionId(sessionId);
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (context) => MyFilesPage(sessionId: sessionId)),
+          MaterialPageRoute(
+            builder: (context) => MyFilesPage(sessionId: sessionId),
+          ),
         );
       } else {
         print('Failed to start session');
@@ -324,7 +377,10 @@ class _OtpPageState extends State<OtpPage> {
             labelText: 'Enter OTP',
             labelStyle: TextStyle(color: Colors.blue), // Change label color
             focusedBorder: UnderlineInputBorder(
-              borderSide: BorderSide(color: Colors.blue, width: 2.0), // Border when focused
+              borderSide: BorderSide(
+                color: Colors.blue,
+                width: 2.0,
+              ), // Border when focused
             ),
           ),
         ),
@@ -340,15 +396,11 @@ class _OtpPageState extends State<OtpPage> {
           style: ElevatedButton.styleFrom(
             backgroundColor: Colors.blue, // Set background color to blue
           ), // Disable button while uploading
-          child: Text(
-            'Submit OTP',
-            style: TextStyle(color: Colors.white),
-          ),
+          child: Text('Submit OTP', style: TextStyle(color: Colors.white)),
         ),
       ],
     );
   }
-
 }
 
 class MyFilesPage extends StatefulWidget {
@@ -363,7 +415,10 @@ class _MyFilesPageState extends State<MyFilesPage> {
   List<dynamic> folders = [];
   List<dynamic> files = [];
   int _selectedIndex = 0; // For bottom navigation index
-  List<dynamic> visitedFolderIDs = [[0, '/'], [0, '/']];
+  List<dynamic> visitedFolderIDs = [
+    [0, '/'],
+    [0, '/'],
+  ];
   List<dynamic> copiedFileFolders = [];
   int copyStatus = 0; // 0: empty, 1: copied 2: moved
   bool isLoading = false;
@@ -411,7 +466,9 @@ class _MyFilesPageState extends State<MyFilesPage> {
       isLoading = true; // Start loading
     });
     final response = await http.get(
-      Uri.parse('$baseURL/folder/list?fld_id=${fldId.toString()}&sess_id=${widget.sessionId}'),
+      Uri.parse(
+        '$baseURL/folder/list?fld_id=${fldId.toString()}&sess_id=${widget.sessionId}',
+      ),
     );
 
     if (response.statusCode == 200) {
@@ -430,7 +487,9 @@ class _MyFilesPageState extends State<MyFilesPage> {
 
   Future<String> _getDownloadLink(fileCode) async {
     final response = await http.get(
-      Uri.parse('$baseURL/file/direct_link?file_code=$fileCode&sess_id=${widget.sessionId}')
+      Uri.parse(
+        '$baseURL/file/direct_link?file_code=$fileCode&sess_id=${widget.sessionId}',
+      ),
     );
 
     if (response.statusCode == 200) {
@@ -444,9 +503,9 @@ class _MyFilesPageState extends State<MyFilesPage> {
 
   Future<String> getDownloadDirectory() async {
     String subpath = visitedFolderIDs
-      .map((entry) => entry[1])
-      .where((path) => path.isNotEmpty)
-      .join('/');
+        .map((entry) => entry[1])
+        .where((path) => path.isNotEmpty)
+        .join('/');
     subpath = subpath.replaceAll(RegExp(r'/{2,}'), '/');
     if (subpath.endsWith('/')) {
       subpath = subpath.substring(0, subpath.length - 1);
@@ -461,7 +520,9 @@ class _MyFilesPageState extends State<MyFilesPage> {
       String? userHome = Platform.environment['USERPROFILE'];
       return "$userHome\\Documents\\MySyncFolder\\$subpath";
     } else if (Platform.isMacOS) {
-      Directory dir = await getDownloadsDirectory() ?? await getApplicationDocumentsDirectory();
+      Directory dir =
+          await getDownloadsDirectory() ??
+          await getApplicationDocumentsDirectory();
       return "${dir.path}/$subpath"; // Add subpath here if needed
     } else if (Platform.isLinux) {
       String? home = Platform.environment['HOME'];
@@ -486,7 +547,7 @@ class _MyFilesPageState extends State<MyFilesPage> {
       case 1:
         return _buildSyncPage();
       case 2:
-        return UploadPage(sessionId: widget.sessionId,);
+        return UploadPage(sessionId: widget.sessionId);
       default:
         return _buildFileFolderList();
     }
@@ -496,7 +557,8 @@ class _MyFilesPageState extends State<MyFilesPage> {
   Widget _buildFileFolderList() {
     int itemsPerPage = numberOfImages; // Number of items per page
     int totalItems = folders.length + files.length;
-    bool selectionMode = selectedItems.isNotEmpty; // Enable selection mode if items are selected
+    bool selectionMode =
+        selectedItems.isNotEmpty; // Enable selection mode if items are selected
 
     List<dynamic> getPaginatedItems() {
       if (itemsPerPage == 0) {
@@ -504,10 +566,10 @@ class _MyFilesPageState extends State<MyFilesPage> {
       }
       int startIndex = currentPage * itemsPerPage;
       int endIndex = startIndex + itemsPerPage;
-      return [...folders, ...files].sublist(
-        startIndex,
-        endIndex > totalItems ? totalItems : endIndex,
-      );
+      return [
+        ...folders,
+        ...files,
+      ].sublist(startIndex, endIndex > totalItems ? totalItems : endIndex);
     }
 
     // Function to show the dialog
@@ -528,7 +590,10 @@ class _MyFilesPageState extends State<MyFilesPage> {
                     hintText: "Enter page number",
                     border: OutlineInputBorder(),
                     focusedBorder: OutlineInputBorder(
-                      borderSide: BorderSide(color: Colors.blue, width: 2.0), // Border when focused
+                      borderSide: BorderSide(
+                        color: Colors.blue,
+                        width: 2.0,
+                      ), // Border when focused
                     ),
                   ),
                 ),
@@ -538,7 +603,11 @@ class _MyFilesPageState extends State<MyFilesPage> {
               TextButton(
                 onPressed: () {
                   int? page = int.tryParse(controller.text);
-                  if (page != null && page > 0 && page <= ((folders.length + files.length) / itemsPerPage).ceil()) {
+                  if (page != null &&
+                      page > 0 &&
+                      page <=
+                          ((folders.length + files.length) / itemsPerPage)
+                              .ceil()) {
                     setState(() {
                       currentPage = page - 1; // Update currentPage
                     });
@@ -550,13 +619,13 @@ class _MyFilesPageState extends State<MyFilesPage> {
                     );
                   }
                 },
-                child: Text("Go to", style: TextStyle(color: Colors.blue),),
+                child: Text("Go to", style: TextStyle(color: Colors.blue)),
               ),
               TextButton(
                 onPressed: () {
                   Navigator.of(context).pop(); // Close dialog
                 },
-                child: Text("Cancel", style: TextStyle(color: Colors.blue),),
+                child: Text("Cancel", style: TextStyle(color: Colors.blue)),
               ),
             ],
           );
@@ -578,7 +647,7 @@ class _MyFilesPageState extends State<MyFilesPage> {
 
     Icon getFileIcon(String fileName) {
       String extension = fileName.split('.').last.toLowerCase();
-      
+
       switch (extension) {
         case 'jpg':
         case 'jpeg':
@@ -596,7 +665,10 @@ class _MyFilesPageState extends State<MyFilesPage> {
         case 'pdf':
           return Icon(Icons.picture_as_pdf, color: Colors.purple);
         default:
-          return Icon(Icons.insert_drive_file, color: Colors.grey); // Default icon for unknown types
+          return Icon(
+            Icons.insert_drive_file,
+            color: Colors.grey,
+          ); // Default icon for unknown types
       }
     }
 
@@ -604,9 +676,14 @@ class _MyFilesPageState extends State<MyFilesPage> {
       backgroundColor: Colors.white,
       appBar: AppBar(
         backgroundColor: Colors.white,
-        title: Text(selectionMode ? "${selectedItems.length} selected" : 'My Files'),
+        title: Text(
+          selectionMode ? "${selectedItems.length} selected" : 'My Files',
+        ),
         leading: IconButton(
-          icon: Icon(selectionMode ? Icons.close : Icons.arrow_back, color: Colors.blue,),
+          icon: Icon(
+            selectionMode ? Icons.close : Icons.arrow_back,
+            color: Colors.blue,
+          ),
           onPressed: () {
             if (selectionMode) {
               setState(() {
@@ -654,178 +731,238 @@ class _MyFilesPageState extends State<MyFilesPage> {
           ],
         ],
       ),
-      floatingActionButton: copyStatus != 0
-          ? FloatingActionButton(
-              onPressed: _pasteFile,
-              child: Icon(Icons.paste, color: Colors.blue),
-            )
-          : null,
-      body: isLoading
-          ? Center(child: CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(Colors.blue)))
-          : Column(
-              children: [
-                Expanded(
-                  child: ListView(
-                    children: [
-                      if (getPaginatedItems().isNotEmpty) ...[
-                        // Display Folders
-                        if (folders.isNotEmpty)
-                          ...getPaginatedItems()
-                              .where((item) => !item.containsKey('file_code'))
-                              .map((folder) {
-                            bool isSelected = selectedItems.contains(folder);
-                            return GestureDetector(
-                              onLongPress: () => toggleSelectionMode(folder),
-                              onTap: () {
-                                if (selectionMode) {
-                                  toggleSelectionMode(folder);
-                                } else {
-                                  _openCloudFolder(context, folder);
-                                }
-                              },
-                              child: ListTile(
-                                leading: Icon(Icons.folder, size: 40, color: isSelected ? Colors.cyan : Colors.blue),
-                                title: Text(folder['name']),
-                                trailing: IconButton(
-                                  icon: Icon(
-                                    selectionMode
-                                        ? (isSelected ? Icons.check_circle : Icons.radio_button_unchecked)
-                                        : Icons.more_vert,
-                                    color: isSelected ? Colors.blue : null,
-                                  ),
-                                  onPressed: selectionMode
-                                      ? () => toggleSelectionMode(folder)
-                                      : () => _showOptions(context, folder),
-                                ),
-                              ),
-                            );
-                          }).toList(),
-
-                        // Display Files
-                        if (files.isNotEmpty)
-                          ...getPaginatedItems().where((item) => item.containsKey('file_code')).map((file) {
-                            bool isSelected = selectedItems.contains(file);
-                            return GestureDetector(
-                              onLongPress: () => toggleSelectionMode(file),
-                              onTap: () {
-                                if (selectionMode) {
-                                  toggleSelectionMode(file);
-                                } else {
-                                  openCloudFile(context, file['file_code'], file['name']);
-                                }
-                              },
-                              child: ListTile(
-                                leading: Stack(
-                                  children: [
-                                    Image.network(
-                                      file['thumbnail'], 
-                                      width: 40,
-                                      height: 40, 
-                                      fit: BoxFit.cover,
-                                      errorBuilder: (BuildContext context, Object error, StackTrace? stackTrace) {
-                                        // Get the appropriate icon based on the file type
-                                        return getFileIcon(file['name']);
-                                      },
-                                    ),
-                                    if (isSelected)
-                                      Positioned.fill(
-                                        child: Container(
-                                          color: Colors.blue.withOpacity(0.5),
-                                          child: Icon(Icons.check, color: Colors.white, size: 40),
-                                        ),
+      floatingActionButton:
+          copyStatus != 0
+              ? FloatingActionButton(
+                onPressed: _pasteFile,
+                child: Icon(Icons.paste, color: Colors.blue),
+              )
+              : null,
+      body:
+          isLoading
+              ? Center(
+                child: CircularProgressIndicator(
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.blue),
+                ),
+              )
+              : Column(
+                children: [
+                  Expanded(
+                    child: ListView(
+                      children: [
+                        if (getPaginatedItems().isNotEmpty) ...[
+                          // Display Folders
+                          if (folders.isNotEmpty)
+                            ...getPaginatedItems()
+                                .where((item) => !item.containsKey('file_code'))
+                                .map((folder) {
+                                  bool isSelected = selectedItems.contains(
+                                    folder,
+                                  );
+                                  return GestureDetector(
+                                    onLongPress:
+                                        () => toggleSelectionMode(folder),
+                                    onTap: () {
+                                      if (selectionMode) {
+                                        toggleSelectionMode(folder);
+                                      } else {
+                                        _openCloudFolder(context, folder);
+                                      }
+                                    },
+                                    child: ListTile(
+                                      leading: Icon(
+                                        Icons.folder,
+                                        size: 40,
+                                        color:
+                                            isSelected
+                                                ? Colors.cyan
+                                                : Colors.blue,
                                       ),
-                                  ],
-                                ),
-                                title: Text(file['name']),
-                                trailing: IconButton(
-                                  icon: Icon(
-                                    selectionMode
-                                        ? (isSelected ? Icons.check_circle : Icons.radio_button_unchecked)
-                                        : Icons.more_vert,
-                                    color: isSelected ? Colors.blue : null,
-                                  ),
-                                  onPressed: selectionMode
-                                      ? () => toggleSelectionMode(file)
-                                      : () => _showOptions(context, file),
+                                      title: Text(folder['name']),
+                                      trailing: IconButton(
+                                        icon: Icon(
+                                          selectionMode
+                                              ? (isSelected
+                                                  ? Icons.check_circle
+                                                  : Icons
+                                                      .radio_button_unchecked)
+                                              : Icons.more_vert,
+                                          color:
+                                              isSelected ? Colors.blue : null,
+                                        ),
+                                        onPressed:
+                                            selectionMode
+                                                ? () =>
+                                                    toggleSelectionMode(folder)
+                                                : () => _showOptions(
+                                                  context,
+                                                  folder,
+                                                ),
+                                      ),
+                                    ),
+                                  );
+                                })
+                                .toList(),
+
+                          // Display Files
+                          if (files.isNotEmpty)
+                            ...getPaginatedItems()
+                                .where((item) => item.containsKey('file_code'))
+                                .map((file) {
+                                  bool isSelected = selectedItems.contains(
+                                    file,
+                                  );
+                                  return GestureDetector(
+                                    onLongPress:
+                                        () => toggleSelectionMode(file),
+                                    onTap: () {
+                                      if (selectionMode) {
+                                        toggleSelectionMode(file);
+                                      } else {
+                                        openCloudFile(
+                                          context,
+                                          file['file_code'],
+                                          file['name'],
+                                        );
+                                      }
+                                    },
+                                    child: ListTile(
+                                      leading: Stack(
+                                        children: [
+                                          Image.network(
+                                            file['thumbnail'],
+                                            width: 40,
+                                            height: 40,
+                                            fit: BoxFit.cover,
+                                            errorBuilder: (
+                                              BuildContext context,
+                                              Object error,
+                                              StackTrace? stackTrace,
+                                            ) {
+                                              // Get the appropriate icon based on the file type
+                                              return getFileIcon(file['name']);
+                                            },
+                                          ),
+                                          if (isSelected)
+                                            Positioned.fill(
+                                              child: Container(
+                                                color: Colors.blue.withOpacity(
+                                                  0.5,
+                                                ),
+                                                child: Icon(
+                                                  Icons.check,
+                                                  color: Colors.white,
+                                                  size: 40,
+                                                ),
+                                              ),
+                                            ),
+                                        ],
+                                      ),
+                                      title: Text(file['name']),
+                                      trailing: IconButton(
+                                        icon: Icon(
+                                          selectionMode
+                                              ? (isSelected
+                                                  ? Icons.check_circle
+                                                  : Icons
+                                                      .radio_button_unchecked)
+                                              : Icons.more_vert,
+                                          color:
+                                              isSelected ? Colors.blue : null,
+                                        ),
+                                        onPressed:
+                                            selectionMode
+                                                ? () =>
+                                                    toggleSelectionMode(file)
+                                                : () =>
+                                                    _showOptions(context, file),
+                                      ),
+                                    ),
+                                  );
+                                })
+                                .toList(),
+                        ] else ...[
+                          Center(
+                            child: Padding(
+                              padding: EdgeInsets.all(16.0),
+                              child: Text(
+                                "This folder is empty",
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
                                 ),
                               ),
-                            );
-                          }).toList(),
-                      ] else ...[
-                        Center(
-                          child: Padding(
-                            padding: EdgeInsets.all(16.0),
-                            child: Text(
-                              "This folder is empty",
-                              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                             ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+
+                  // Pagination Controls
+                  if (totalItems > itemsPerPage && itemsPerPage > 0) ...[
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        ElevatedButton(
+                          onPressed:
+                              currentPage > 0
+                                  ? () {
+                                    setState(() {
+                                      currentPage--;
+                                    });
+                                  }
+                                  : null,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor:
+                                Colors.blue, // Set background color to blue
+                          ), // Disable button while uploading
+                          child: Text(
+                            "Previous",
+                            style: TextStyle(color: Colors.white),
+                          ),
+                        ),
+                        ElevatedButton(
+                          onPressed: () => showGoToPageDialog(context),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor:
+                                Colors.blue, // Set background color to blue
+                          ), // Disable button while uploading
+                          child: Text(
+                            "Page ${currentPage + 1} of ${(totalItems / itemsPerPage).ceil()}",
+                            style: TextStyle(color: Colors.white),
+                          ),
+                        ),
+                        ElevatedButton(
+                          onPressed:
+                              (currentPage + 1) * itemsPerPage < totalItems
+                                  ? () {
+                                    setState(() {
+                                      currentPage++;
+                                    });
+                                  }
+                                  : null,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor:
+                                Colors.blue, // Set background color to blue
+                          ), // Disable button while uploading
+                          child: Text(
+                            "Next",
+                            style: TextStyle(color: Colors.white),
                           ),
                         ),
                       ],
-                    ],
-                  ),
-                ),
-
-                // Pagination Controls
-                if (totalItems > itemsPerPage && itemsPerPage > 0) ...[
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      ElevatedButton(
-                        onPressed: currentPage > 0
-                            ? () {
-                                setState(() {
-                                  currentPage--;
-                                });
-                              }
-                            : null,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.blue, // Set background color to blue
-                        ), // Disable button while uploading
-                        child: Text(
-                          "Previous",
-                          style: TextStyle(color: Colors.white),
-                        ),
-                      ),
-                      ElevatedButton(
-                        onPressed: () => showGoToPageDialog(context),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.blue, // Set background color to blue
-                        ), // Disable button while uploading
-                        child: Text(
-                          "Page ${currentPage + 1} of ${(totalItems / itemsPerPage).ceil()}",
-                          style: TextStyle(color: Colors.white),
-                        ),
-                      ),
-                      ElevatedButton(
-                        onPressed: (currentPage + 1) * itemsPerPage < totalItems
-                            ? () {
-                                setState(() {
-                                  currentPage++;
-                                });
-                              }
-                            : null,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.blue, // Set background color to blue
-                        ), // Disable button while uploading
-                        child: Text(
-                          "Next",
-                          style: TextStyle(color: Colors.white),
-                        ),
-                      ),
-                    ],
-                  ),
-                  SizedBox(height: 16),
+                    ),
+                    SizedBox(height: 16),
+                  ],
                 ],
-              ],
-            ),
+              ),
     );
-  
   }
 
   // Display file/folder list with options
   Widget _buildSyncPage() {
-    return SyncPage(sessionId: widget.sessionId,);
+    return SyncPage(sessionId: widget.sessionId);
   }
 
   // Show options (Rename, Copy, Move To, Download, Remove) for file/folder
@@ -846,10 +983,12 @@ class _MyFilesPageState extends State<MyFilesPage> {
           },
           onMove: () {
             Navigator.pop(context);
-            _copyFile(item, 2);            
+            _copyFile(item, 2);
           },
           onDownload: () async {
-            final scaffoldMessenger = ScaffoldMessenger.of(context); // Store reference
+            final scaffoldMessenger = ScaffoldMessenger.of(
+              context,
+            ); // Store reference
             Navigator.of(context, rootNavigator: true).pop(); // Close the modal
             setState(() {
               isLoading = true;
@@ -863,9 +1002,16 @@ class _MyFilesPageState extends State<MyFilesPage> {
             } else {
               for (dynamic selectedItem in selectedItems) {
                 if (selectedItem.containsKey('file_code')) {
-                  await downloadFile(selectedItem['file_code'], selectedItem['name'], "");
+                  await downloadFile(
+                    selectedItem['file_code'],
+                    selectedItem['name'],
+                    "",
+                  );
                 } else {
-                  await downloadFolder(selectedItem['fld_id'], selectedItem['name']);
+                  await downloadFolder(
+                    selectedItem['fld_id'],
+                    selectedItem['name'],
+                  );
                 }
               }
             }
@@ -876,7 +1022,10 @@ class _MyFilesPageState extends State<MyFilesPage> {
             });
             downloadPath = downloadPath.replaceAll("/storage/emulated/0", "");
             scaffoldMessenger.showSnackBar(
-              SnackBar(content: Text('File/Folder(s) are downloaded to $downloadPath'), duration: Duration(seconds: 10),),
+              SnackBar(
+                content: Text('File/Folder(s) are downloaded to $downloadPath'),
+                duration: Duration(seconds: 10),
+              ),
             );
           },
           onRemove: () async {
@@ -904,12 +1053,18 @@ class _MyFilesPageState extends State<MyFilesPage> {
       await _fetchFilesAndFolders(item["fld_id"]);
       visitedFolderIDs.add([item['fld_id'], item['name']]);
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error: $e')));
     }
   }
 
   // Show text file content inside a dialog
-  Future<void> openCloudFile(BuildContext context, String fileCode, String fileName) async {
+  Future<void> openCloudFile(
+    BuildContext context,
+    String fileCode,
+    String fileName,
+  ) async {
     try {
       setState(() {
         isLoading = true;
@@ -963,16 +1118,11 @@ class _MyFilesPageState extends State<MyFilesPage> {
       builder: (context) {
         return AlertDialog(
           title: Text("Text File"),
-          content: SingleChildScrollView(
-            child: Text(content),
-          ),
+          content: SingleChildScrollView(child: Text(content)),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: Text(
-                "Close",
-                style: TextStyle(color: Colors.blue),
-              ),
+              child: Text("Close", style: TextStyle(color: Colors.blue)),
             ),
           ],
         );
@@ -991,10 +1141,7 @@ class _MyFilesPageState extends State<MyFilesPage> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: Text(
-                "Close",
-                style: TextStyle(color: Colors.blue),
-              ),
+              child: Text("Close", style: TextStyle(color: Colors.blue)),
             ),
           ],
         );
@@ -1009,7 +1156,8 @@ class _MyFilesPageState extends State<MyFilesPage> {
 
     showDialog(
       context: context,
-      barrierDismissible: true, // Makes the dialog dismissable by tapping outside
+      barrierDismissible:
+          true, // Makes the dialog dismissable by tapping outside
       builder: (context) {
         return AlertDialog(
           title: Text("Audio Player"),
@@ -1042,7 +1190,9 @@ class _MyFilesPageState extends State<MyFilesPage> {
   void _playVideoFile(BuildContext context, File file) {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) => VideoPlayerScreen(videoFile: file)),
+      MaterialPageRoute(
+        builder: (context) => VideoPlayerScreen(videoFile: file),
+      ),
     );
   }
 
@@ -1057,21 +1207,28 @@ class _MyFilesPageState extends State<MyFilesPage> {
 
   void _homeCloudFolder() async {
     try {
-      visitedFolderIDs = [[0, '/'], [0, '/']];
+      visitedFolderIDs = [
+        [0, '/'],
+        [0, '/'],
+      ];
       await _fetchFilesAndFolders(visitedFolderIDs.last.first);
     } catch (e) {
       print(e);
     }
   }
 
-  Future<void> downloadFile(String fileCode, String fileName, String filePath) async {
+  Future<void> downloadFile(
+    String fileCode,
+    String fileName,
+    String filePath,
+  ) async {
     String saveDirectory = filePath;
     print("filePath: $filePath");
-    
+
     // Get the download directory if no path is provided
     if (filePath == "") saveDirectory = await getDownloadDirectory();
     print("saveDirectory: $saveDirectory");
-    
+
     try {
       String downloadLink = await _getDownloadLink(fileCode);
       if (Platform.isAndroid) {
@@ -1098,7 +1255,11 @@ class _MyFilesPageState extends State<MyFilesPage> {
     }
   }
 
-  Future<void> downloadFolder(int folderID, String folderName, [String subpath = ""]) async {
+  Future<void> downloadFolder(
+    int folderID,
+    String folderName, [
+    String subpath = "",
+  ]) async {
     String saveDirectory;
     if (subpath == "") {
       saveDirectory = "${await getDownloadDirectory()}/$folderName";
@@ -1122,7 +1283,9 @@ class _MyFilesPageState extends State<MyFilesPage> {
   }
 
   void _showRenameDialog(BuildContext context, dynamic item) {
-    TextEditingController controller = TextEditingController(text: item['name']);
+    TextEditingController controller = TextEditingController(
+      text: item['name'],
+    );
     showDialog(
       context: context,
       builder: (context) {
@@ -1134,7 +1297,10 @@ class _MyFilesPageState extends State<MyFilesPage> {
               hintText: 'Enter new name',
               labelStyle: TextStyle(color: Colors.blue), // Change label color
               focusedBorder: UnderlineInputBorder(
-                borderSide: BorderSide(color: Colors.blue, width: 2.0), // Border when focused
+                borderSide: BorderSide(
+                  color: Colors.blue,
+                  width: 2.0,
+                ), // Border when focused
               ),
             ),
           ),
@@ -1144,7 +1310,7 @@ class _MyFilesPageState extends State<MyFilesPage> {
                 Navigator.pop(context);
                 _renameFile(item, controller.text);
               },
-              child: Text('Rename', style: TextStyle(color: Colors.blue),),
+              child: Text('Rename', style: TextStyle(color: Colors.blue)),
             ),
           ],
         );
@@ -1160,17 +1326,21 @@ class _MyFilesPageState extends State<MyFilesPage> {
     if (item.containsKey('file_code')) {
       String fileCode = item['file_code'].toString();
       response = await http.get(
-        Uri.parse('$baseURL/file/rename?file_code=$fileCode&name=$newName&sess_id=${widget.sessionId}'),
+        Uri.parse(
+          '$baseURL/file/rename?file_code=$fileCode&name=$newName&sess_id=${widget.sessionId}',
+        ),
       );
     } else if (item.containsKey('fld_id')) {
       String folderID = item['fld_id'].toString();
       response = await http.get(
-        Uri.parse('$baseURL/folder/rename?fld_id=$folderID&name=$newName&sess_id=${widget.sessionId}'),
+        Uri.parse(
+          '$baseURL/folder/rename?fld_id=$folderID&name=$newName&sess_id=${widget.sessionId}',
+        ),
       );
     } else {
       response = {'statusCode': 404};
     }
-    
+
     if (response.statusCode == 200) {
       await _fetchFilesAndFolders(visitedFolderIDs.last.first);
       print('Successfully rename ${item['name']} to $newName.');
@@ -1184,7 +1354,7 @@ class _MyFilesPageState extends State<MyFilesPage> {
 
   void _copyFile(dynamic item, int copyOrMove) {
     copyStatus = copyOrMove;
-    if (item != ""){
+    if (item != "") {
       copiedFileFolders = [item];
     } else {
       copiedFileFolders = selectedItems;
@@ -1200,19 +1370,24 @@ class _MyFilesPageState extends State<MyFilesPage> {
     });
     print("paste file.");
     String folderID = visitedFolderIDs.last.first.toString();
-    for(dynamic copiedFileFolder in copiedFileFolders){
-      if (copyStatus == 1 && copiedFileFolder.containsKey('file_code')) {  // copy file.
+    for (dynamic copiedFileFolder in copiedFileFolders) {
+      if (copyStatus == 1 && copiedFileFolder.containsKey('file_code')) {
+        // copy file.
         print("copy file.");
         String fileCode = copiedFileFolder['file_code'];
         final response = await http.get(
-          Uri.parse('$baseURL/file/clone?file_code=$fileCode&sess_id=${widget.sessionId}'),
+          Uri.parse(
+            '$baseURL/file/clone?file_code=$fileCode&sess_id=${widget.sessionId}',
+          ),
         );
 
         if (response.statusCode == 200) {
           var data = jsonDecode(response.body);
           String clonedFileCode = data['result']['filecode'];
           final response1 = await http.get(
-            Uri.parse('$baseURL/file/set_folder?file_code=$clonedFileCode&fld_id=$folderID&sess_id=${widget.sessionId}'),
+            Uri.parse(
+              '$baseURL/file/set_folder?file_code=$clonedFileCode&fld_id=$folderID&sess_id=${widget.sessionId}',
+            ),
           );
           if (response1.statusCode == 200) {
             print('Successfully copied.');
@@ -1223,43 +1398,60 @@ class _MyFilesPageState extends State<MyFilesPage> {
           print('Failed to copy file');
           return;
         }
-      } else if (copyStatus == 2 && copiedFileFolder.containsKey('file_code')) { // move file.
+      } else if (copyStatus == 2 && copiedFileFolder.containsKey('file_code')) {
+        // move file.
         print("move file.");
         String fileCode = copiedFileFolder['file_code'];
-          final response = await http.get(
-            Uri.parse('$baseURL/file/set_folder?file_code=$fileCode&fld_id=$folderID&sess_id=${widget.sessionId}'),
-          );
-          if (response.statusCode == 200) {
-            print('Successfully moved.');
-          } else {
-            print("Failed to paste file.");
-          }
-      } else if (copyStatus == 1 && !copiedFileFolder.containsKey('file_code')) { // copy folder.
+        final response = await http.get(
+          Uri.parse(
+            '$baseURL/file/set_folder?file_code=$fileCode&fld_id=$folderID&sess_id=${widget.sessionId}',
+          ),
+        );
+        if (response.statusCode == 200) {
+          print('Successfully moved.');
+        } else {
+          print("Failed to paste file.");
+        }
+      } else if (copyStatus == 1 &&
+          !copiedFileFolder.containsKey('file_code')) {
+        // copy folder.
         print("copy folder.");
         String copyFolderID = copiedFileFolder['fld_id'].toString();
         final response = await http.get(
-          Uri.parse('$baseURL/folder/copy?fld_id=$copyFolderID&sess_id=${widget.sessionId}'),
+          Uri.parse(
+            '$baseURL/folder/copy?fld_id=$copyFolderID&sess_id=${widget.sessionId}',
+          ),
         );
 
         if (response.statusCode == 200) {
           var data = jsonDecode(response.body);
           String clonedFolderID = data['result']['fld_id'].toString();
           final response1 = await http.get(
-            Uri.parse('$baseURL/folder/move?fld_id=$clonedFolderID&dest_fld_id=$folderID&sess_id=${widget.sessionId}'),
+            Uri.parse(
+              '$baseURL/folder/move?fld_id=$clonedFolderID&dest_fld_id=$folderID&sess_id=${widget.sessionId}',
+            ),
           );
           if (response1.statusCode == 200) {
-            String copiedFolderID = jsonDecode(response.body)['result']['fld_id'].toString();
-            _renameFile(jsonDecode(response.body)['result'], copiedFileFolder['name']);
+            String copiedFolderID =
+                jsonDecode(response.body)['result']['fld_id'].toString();
+            _renameFile(
+              jsonDecode(response.body)['result'],
+              copiedFileFolder['name'],
+            );
             print('Successfully copied.');
           } else {
             print("Failed to paste folder, it's cloned to the root directory.");
           }
         }
-      } else if (copyStatus == 2 && !copiedFileFolder.containsKey('file_code')) { // move folder.
+      } else if (copyStatus == 2 &&
+          !copiedFileFolder.containsKey('file_code')) {
+        // move folder.
         print("move folder.");
         String moveFolderID = copiedFileFolder['fld_id'].toString();
         final response1 = await http.get(
-          Uri.parse('$baseURL/folder/move?fld_id=$moveFolderID&dest_fld_id=$folderID&sess_id=${widget.sessionId}'),
+          Uri.parse(
+            '$baseURL/folder/move?fld_id=$moveFolderID&dest_fld_id=$folderID&sess_id=${widget.sessionId}',
+          ),
         );
         if (response1.statusCode == 200) {
           print('Successfully moved.');
@@ -1280,10 +1472,12 @@ class _MyFilesPageState extends State<MyFilesPage> {
       isLoading = true; // Start loading
     });
     print(item);
-    if(item.containsKey('file_code')) {
+    if (item.containsKey('file_code')) {
       String fileCode = item['file_code'].toString();
       final response = await http.get(
-        Uri.parse('$baseURL/file/remove?file_code=$fileCode&remove=1&sess_id=${widget.sessionId}'),
+        Uri.parse(
+          '$baseURL/file/remove?file_code=$fileCode&remove=1&sess_id=${widget.sessionId}',
+        ),
       );
       if (response.statusCode == 200) {
         print('Successfully removed.');
@@ -1293,7 +1487,9 @@ class _MyFilesPageState extends State<MyFilesPage> {
     } else {
       String folderID = item['fld_id'].toString();
       final response = await http.get(
-        Uri.parse('$baseURL/folder/delete?fld_id=$folderID&sess_id=${widget.sessionId}'),
+        Uri.parse(
+          '$baseURL/folder/delete?fld_id=$folderID&sess_id=${widget.sessionId}',
+        ),
       );
       print(folderID);
       print(widget.sessionId);
@@ -1322,7 +1518,9 @@ class _MyFilesPageState extends State<MyFilesPage> {
   // Fetch files and folders using the API
   Future<dynamic> fetchFilesAndFolders(fldId) async {
     final response = await http.get(
-      Uri.parse('$baseURL/folder/list?fld_id=${fldId.toString()}&sess_id=${widget.sessionId}'),
+      Uri.parse(
+        '$baseURL/folder/list?fld_id=${fldId.toString()}&sess_id=${widget.sessionId}',
+      ),
     );
 
     if (response.statusCode == 200) {
@@ -1340,7 +1538,7 @@ class _MyFilesPageState extends State<MyFilesPage> {
       isScrollControlled: true,
       builder: (context) {
         return SingleChildScrollView(
-          child:Column(
+          child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               // Sync Options
@@ -1397,14 +1595,15 @@ class _MyFilesPageState extends State<MyFilesPage> {
               ListTile(
                 leading: Icon(Icons.privacy_tip, color: Colors.blue),
                 title: Text("Privacy Policy"),
-                onTap: () => _openURL("https://filelu.com/pages/privacy-policy/"),
+                onTap:
+                    () => _openURL("https://filelu.com/pages/privacy-policy/"),
               ),
 
               // Logout
               ListTile(
                 leading: Icon(Icons.logout, color: Colors.blue),
                 title: Text("Log Out"),
-                onTap: ()=> _logout(context),
+                onTap: () => _logout(context),
               ),
             ],
           ),
@@ -1439,7 +1638,10 @@ class _MyFilesPageState extends State<MyFilesPage> {
                 _startBackup();
                 Navigator.pop(context);
               },
-              child: Text("From Beginning", style: TextStyle(color: Colors.blue)),
+              child: Text(
+                "From Beginning",
+                style: TextStyle(color: Colors.blue),
+              ),
             ),
           ],
         );
@@ -1465,9 +1667,14 @@ class _MyFilesPageState extends State<MyFilesPage> {
                 decoration: InputDecoration(
                   labelText: "Enter Number",
                   hintText: "e.g. 10",
-                  labelStyle: TextStyle(color: Colors.blue), // Change label color
+                  labelStyle: TextStyle(
+                    color: Colors.blue,
+                  ), // Change label color
                   focusedBorder: UnderlineInputBorder(
-                    borderSide: BorderSide(color: Colors.blue, width: 2.0), // Border when focused
+                    borderSide: BorderSide(
+                      color: Colors.blue,
+                      width: 2.0,
+                    ), // Border when focused
                   ),
                 ),
               ),
@@ -1491,13 +1698,13 @@ class _MyFilesPageState extends State<MyFilesPage> {
                 }
                 Navigator.of(context).pop(); // Close the dialog
               },
-              child: Text("Set", style: TextStyle(color: Colors.blue),),
+              child: Text("Set", style: TextStyle(color: Colors.blue)),
             ),
             TextButton(
               onPressed: () {
                 Navigator.of(context).pop(); // Close the dialog
               },
-              child: Text("Cancel", style: TextStyle(color: Colors.blue),),
+              child: Text("Cancel", style: TextStyle(color: Colors.blue)),
             ),
           ],
         );
@@ -1562,24 +1769,27 @@ class _MyFilesPageState extends State<MyFilesPage> {
   void _openURL(String url) async {
     Uri uri = Uri.parse(url);
 
-    if (Platform.isWindows) {
-      // Use `Process.start` on Windows instead of `launchUrl`
-      await Process.start('explorer.exe', [url]);
-    } else {
-      // setState(() {
-      //   errorMessage += "NotWin...";
-      // });
-      if (await canLaunchUrl(uri)) {
-        // setState(() {
-        //   errorMessage += "Can Launch Url...";
-        // });
-        await launchUrl(uri, mode: LaunchMode.inAppWebView);
+    try {
+      if (Platform.isWindows) {
+        // Use Process.start to open URLs on Windows.
+        await Process.start('explorer.exe', [url]);
       } else {
-        // setState(() {
-        //   errorMessage += "❌ Could not open: $url...";
-        // });
-        print("❌ Could not open: $url");
+        // For Android and other platforms, handle normally.
+        if (await canLaunchUrl(uri)) {
+          // Use external application mode for Android to avoid WebView issues.
+          await launchUrl(
+            uri,
+            mode:
+                Platform.isAndroid
+                    ? LaunchMode.externalApplication
+                    : LaunchMode.inAppWebView,
+          );
+        } else {
+          print("❌ Could not open: $url");
+        }
       }
+    } catch (e) {
+      print('Error occurred while trying to open URL: $url, Error: $e');
     }
   }
 
@@ -1590,34 +1800,52 @@ class _MyFilesPageState extends State<MyFilesPage> {
       // Prompt user to set a new password
       String? newPassword = await _showPasswordDialog(context, "Set Password");
       if (newPassword != null) {
-        String? confirmPassword = await _showPasswordDialog(context, "Retype Password");
-        
+        String? confirmPassword = await _showPasswordDialog(
+          context,
+          "Retype Password",
+        );
+
         if (confirmPassword == newPassword) {
           await _saveSetting('appLockPassword', newPassword);
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text("App Lock Enabled Successfully"), duration: Duration(seconds: 3)),
+            SnackBar(
+              content: Text("App Lock Enabled Successfully"),
+              duration: Duration(seconds: 3),
+            ),
           );
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text("Passwords do not match. Try again."), duration: Duration(seconds: 3)),
+            SnackBar(
+              content: Text("Passwords do not match. Try again."),
+              duration: Duration(seconds: 3),
+            ),
           );
         }
       }
     } else {
-      String? enteredPassword = await _showPasswordDialog(context, "Enter Password to Unlock");
+      String? enteredPassword = await _showPasswordDialog(
+        context,
+        "Enter Password to Unlock",
+      );
       if (enteredPassword == password) {
         await _saveSetting('appLockPassword', "");
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Incorrect Password"), duration: Duration(seconds: 3)),
+          SnackBar(
+            content: Text("Incorrect Password"),
+            duration: Duration(seconds: 3),
+          ),
         );
       }
     }
   }
 
-  Future<String?> _showPasswordDialog(BuildContext context, String title) async {
+  Future<String?> _showPasswordDialog(
+    BuildContext context,
+    String title,
+  ) async {
     TextEditingController passwordController = TextEditingController();
-    
+
     return showDialog<String>(
       context: context,
       builder: (context) {
@@ -1630,24 +1858,21 @@ class _MyFilesPageState extends State<MyFilesPage> {
               labelText: "Enter Password",
               labelStyle: TextStyle(color: Colors.blue), // Change label color
               focusedBorder: UnderlineInputBorder(
-                borderSide: BorderSide(color: Colors.blue, width: 2.0), // Border when focused
+                borderSide: BorderSide(
+                  color: Colors.blue,
+                  width: 2.0,
+                ), // Border when focused
               ),
             ),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, null),
-              child: Text(
-                "Cancel",
-                style: TextStyle(color: Colors.blue),
-              ),
+              child: Text("Cancel", style: TextStyle(color: Colors.blue)),
             ),
             TextButton(
               onPressed: () => Navigator.pop(context, passwordController.text),
-              child: Text(
-                "OK",
-                style: TextStyle(color: Colors.blue),
-              ),
+              child: Text("OK", style: TextStyle(color: Colors.blue)),
             ),
           ],
         );
@@ -1670,15 +1895,21 @@ class _MyFilesPageState extends State<MyFilesPage> {
   }
 
   void _startBackup() async {
-    FileUploader uploader = FileUploader(sessionId: widget.sessionId, serverUrl: uploadServer);
+    FileUploader uploader = FileUploader(
+      sessionId: widget.sessionId,
+      serverUrl: uploadServer,
+    );
     String cameraFolderID = await uploader.getFolderID("Camera", "0");
-      if (cameraFolderID == "") {
-        cameraFolderID = await uploader.createCloudFolder("Camera", "0");
-      }
+    if (cameraFolderID == "") {
+      cameraFolderID = await uploader.createCloudFolder("Camera", "0");
+    }
     _uploadCameraFolder(cameraFolderID);
     if (_backgroundIsolate != null) return;
     ReceivePort newReceivePort = ReceivePort();
-    _backgroundIsolate = await Isolate.spawn(_fileWatcher, newReceivePort.sendPort);
+    _backgroundIsolate = await Isolate.spawn(
+      _fileWatcher,
+      newReceivePort.sendPort,
+    );
     newReceivePort.listen((message) async {
       String detectedFilePath = message as String;
       print("📂 New file detected in main isolate: $detectedFilePath");
@@ -1715,12 +1946,16 @@ class _MyFilesPageState extends State<MyFilesPage> {
     }
     List<String> cloudFiles = [];
     final response = await http.get(
-      Uri.parse('$baseURL/folder/list?fld_id=$cameraFolderID&sess_id=${widget.sessionId}'),
+      Uri.parse(
+        '$baseURL/folder/list?fld_id=$cameraFolderID&sess_id=${widget.sessionId}',
+      ),
     );
 
     if (response.statusCode == 200) {
       var data = jsonDecode(response.body);
-      cloudFiles = List<String>.from(data['result']['files'].map((file) => file['name']));
+      cloudFiles = List<String>.from(
+        data['result']['files'].map((file) => file['name']),
+      );
     }
 
     List<FileSystemEntity> mediaFiles = [];
@@ -1730,29 +1965,33 @@ class _MyFilesPageState extends State<MyFilesPage> {
       const String directoryPath = "/storage/emulated/0/DCIM/Camera";
       final directory = Directory(directoryPath);
       if (directory.existsSync()) {
-        mediaFiles = directory.listSync().where(
-          (file) {
-            if (file is File) {
-              final ext = file.path.split('.').last.toLowerCase();
-              return ["jpg", "jpeg", "png", "mp4", "mov"].contains(ext);
-            }
-            return false;
-          },
-        ).toList();
+        mediaFiles =
+            directory.listSync().where((file) {
+              if (file is File) {
+                final ext = file.path.split('.').last.toLowerCase();
+                return ["jpg", "jpeg", "png", "mp4", "mov"].contains(ext);
+              }
+              return false;
+            }).toList();
       }
-    } else if (Platform.isIOS) {
-    }
+    } else if (Platform.isIOS) {}
 
     if (fromToday) {
       final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
-      mediaFiles = mediaFiles.where((file) {
-        return FileStat.statSync(file.path).modified.isAfter(DateTime.parse(today));
-      }).toList();
+      mediaFiles =
+          mediaFiles.where((file) {
+            return FileStat.statSync(
+              file.path,
+            ).modified.isAfter(DateTime.parse(today));
+          }).toList();
     }
 
     for (var file in mediaFiles) {
       if (!cloudFiles.contains(file.path.split('/').last.split(r'\').last)) {
-        FileUploader uploader = FileUploader(sessionId: widget.sessionId, serverUrl: uploadServer);
+        FileUploader uploader = FileUploader(
+          sessionId: widget.sessionId,
+          serverUrl: uploadServer,
+        );
         String cameraFolderID = await uploader.getFolderID("Camera", "0");
         if (cameraFolderID == "") {
           cameraFolderID = await uploader.createCloudFolder("Camera", "0");
@@ -1770,7 +2009,7 @@ class _MyFilesPageState extends State<MyFilesPage> {
     _backgroundIsolate = null;
     print("❌ Background Sync Stopped.");
   }
-  
+
   Future<Directory?> _getCameraRollDirectory() async {
     if (Platform.isAndroid) {
       return Directory("/storage/emulated/0/DCIM/Camera");
@@ -1795,23 +2034,13 @@ class _MyFilesPageState extends State<MyFilesPage> {
         selectedItemColor: Colors.blue,
         onTap: _onItemTapped,
         items: [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.folder),
-            label: 'My Files',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.sync),
-            label: 'Sync',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.upload),
-            label: 'Upload',
-          ),
+          BottomNavigationBarItem(icon: Icon(Icons.folder), label: 'My Files'),
+          BottomNavigationBarItem(icon: Icon(Icons.sync), label: 'Sync'),
+          BottomNavigationBarItem(icon: Icon(Icons.upload), label: 'Upload'),
         ],
       ),
     );
   }
-
 }
 
 class FileFolder extends StatelessWidget {
@@ -1864,27 +2093,11 @@ class FileOptions extends StatelessWidget {
   Widget build(BuildContext context) {
     return ListView(
       children: [
-        if (item != "")
-        ListTile(
-          title: Text('Rename'),
-          onTap: onRename,
-        ),
-        ListTile(
-          title: Text('Copy'),
-          onTap: onCopy,
-        ),
-        ListTile(
-          title: Text('Move To'),
-          onTap: onMove,
-        ),
-        ListTile(
-          title: Text('Download'),
-          onTap: onDownload,
-        ),
-        ListTile(
-          title: Text('Remove'),
-          onTap: onRemove,
-        ),
+        if (item != "") ListTile(title: Text('Rename'), onTap: onRename),
+        ListTile(title: Text('Copy'), onTap: onCopy),
+        ListTile(title: Text('Move To'), onTap: onMove),
+        ListTile(title: Text('Download'), onTap: onDownload),
+        ListTile(title: Text('Remove'), onTap: onRemove),
       ],
     );
   }
@@ -1951,7 +2164,7 @@ class _SyncPageState extends State<SyncPage> {
   @override
   void initState() {
     super.initState();
-    _loadSyncOrders(); 
+    _loadSyncOrders();
     _initializeServerUrl();
     _runPerformSync();
     _watchFileCDM();
@@ -1961,11 +2174,15 @@ class _SyncPageState extends State<SyncPage> {
     if (_backgroundIsolate != null) return;
 
     ReceivePort newReceivePort = ReceivePort();
-    _backgroundIsolate = await Isolate.spawn(_filefolderWatcher, newReceivePort.sendPort);
+    _backgroundIsolate = await Isolate.spawn(
+      _filefolderWatcher,
+      newReceivePort.sendPort,
+    );
 
     newReceivePort.listen((message) async {
       if (message is Map<String, dynamic>) {
-        String eventType = message['event']; // "create", "delete", "modify", "move"
+        String eventType =
+            message['event']; // "create", "delete", "modify", "move"
         String detectedFilePath = message['path'];
 
         // Optional delay before handling the event
@@ -2048,14 +2265,18 @@ class _SyncPageState extends State<SyncPage> {
       });
     }
 
-    if (storedSyncedFiles != null && storedSyncedFiles != "" && storedSyncedFiles != {}) {
+    if (storedSyncedFiles != null &&
+        storedSyncedFiles != "" &&
+        storedSyncedFiles != {}) {
       setState(() {
         List<dynamic> decoded = jsonDecode(storedSyncedFiles);
         syncedFiles = decoded.map((e) => List<String>.from(e)).toList();
       });
     }
 
-    if (storedSyncedFileFolders != null && storedSyncedFileFolders != "" && storedSyncedFileFolders != {}) {
+    if (storedSyncedFileFolders != null &&
+        storedSyncedFileFolders != "" &&
+        storedSyncedFileFolders != {}) {
       setState(() {
         syncedFileFolders = jsonDecode(storedSyncedFileFolders);
       });
@@ -2065,7 +2286,9 @@ class _SyncPageState extends State<SyncPage> {
   /// Save sync orders to local storage
   Future<void> _saveSyncOrders() async {
     final prefs = await SharedPreferences.getInstance();
-    String encodedOrders = jsonEncode(syncOrders.map((e) => e.toJson()).toList());
+    String encodedOrders = jsonEncode(
+      syncOrders.map((e) => e.toJson()).toList(),
+    );
     await prefs.setString('sync_orders', encodedOrders);
   }
 
@@ -2076,17 +2299,31 @@ class _SyncPageState extends State<SyncPage> {
   }
 
   /// Add new Sync Order
-  void _addSyncOrder(String localPath, String syncType, String remotePath) async {
+  void _addSyncOrder(
+    String localPath,
+    String syncType,
+    String remotePath,
+  ) async {
     List<String> remotePathList = remotePath.split("/");
     String currentRemoteFldID = "0";
-    for (int i = 0; i < remotePathList.length; i ++) {
+    for (int i = 0; i < remotePathList.length; i++) {
       String currentRemotePath = remotePathList[i];
       if (currentRemotePath == "") break;
-      currentRemoteFldID = await getFolderID(currentRemotePath, currentRemoteFldID);
+      currentRemoteFldID = await getFolderID(
+        currentRemotePath,
+        currentRemoteFldID,
+      );
       if (currentRemoteFldID == "") return;
     }
     setState(() {
-      syncOrders.add(SyncOrder(localPath: localPath, syncType: syncType, remotePath: remotePath, fld_id: currentRemoteFldID));
+      syncOrders.add(
+        SyncOrder(
+          localPath: localPath,
+          syncType: syncType,
+          remotePath: remotePath,
+          fld_id: currentRemoteFldID,
+        ),
+      );
       _toggleSync(syncOrders.length - 1);
     });
     _saveSyncOrders();
@@ -2118,10 +2355,12 @@ class _SyncPageState extends State<SyncPage> {
       context: context,
       builder: (context) {
         return StatefulBuilder(
-          builder: (context, setState) { // Add StatefulBuilder here
+          builder: (context, setState) {
+            // Add StatefulBuilder here
             return AlertDialog(
               title: Text("Add Sync Order"),
-              content: SingleChildScrollView( // Fix overflow issue
+              content: SingleChildScrollView(
+                // Fix overflow issue
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -2130,9 +2369,14 @@ class _SyncPageState extends State<SyncPage> {
                       controller: folderController,
                       decoration: InputDecoration(
                         labelText: "Local Folder Path",
-                        labelStyle: TextStyle(color: Colors.blue), // Change label color
+                        labelStyle: TextStyle(
+                          color: Colors.blue,
+                        ), // Change label color
                         focusedBorder: UnderlineInputBorder(
-                          borderSide: BorderSide(color: Colors.blue, width: 2.0), // Border when focused
+                          borderSide: BorderSide(
+                            color: Colors.blue,
+                            width: 2.0,
+                          ), // Border when focused
                         ),
                         suffixIcon: IconButton(
                           icon: Icon(Icons.folder, color: Colors.blue),
@@ -2150,9 +2394,14 @@ class _SyncPageState extends State<SyncPage> {
                     TextField(
                       decoration: InputDecoration(
                         labelText: "Remote Folder",
-                        labelStyle: TextStyle(color: Colors.blue), // Change label color
+                        labelStyle: TextStyle(
+                          color: Colors.blue,
+                        ), // Change label color
                         focusedBorder: UnderlineInputBorder(
-                          borderSide: BorderSide(color: Colors.blue, width: 2.0), // Border when focused
+                          borderSide: BorderSide(
+                            color: Colors.blue,
+                            width: 2.0,
+                          ), // Border when focused
                         ),
                       ),
                       onChanged: (value) => remotePath = value,
@@ -2162,16 +2411,22 @@ class _SyncPageState extends State<SyncPage> {
                     DropdownButton<String>(
                       value: selectedType,
                       onChanged: (value) {
-                        setState(() => selectedType = value!); // Use local setState
+                        setState(
+                          () => selectedType = value!,
+                        ); // Use local setState
                       },
-                      items: [
-                        "Upload Only",
-                        "Download Only",
-                        "One-Way Sync",
-                        "Two-Way Sync"
-                      ].map((type) {
-                        return DropdownMenuItem(value: type, child: Text(type));
-                      }).toList(),
+                      items:
+                          [
+                            "Upload Only",
+                            "Download Only",
+                            "One-Way Sync",
+                            "Two-Way Sync",
+                          ].map((type) {
+                            return DropdownMenuItem(
+                              value: type,
+                              child: Text(type),
+                            );
+                          }).toList(),
                     ),
                   ],
                 ),
@@ -2179,20 +2434,18 @@ class _SyncPageState extends State<SyncPage> {
               actions: [
                 TextButton(
                   onPressed: () {
-                    _addSyncOrder(folderController.text, selectedType, remotePath);
+                    _addSyncOrder(
+                      folderController.text,
+                      selectedType,
+                      remotePath,
+                    );
                     Navigator.pop(context);
                   },
-                  child: Text(
-                    "Add",
-                    style: TextStyle(color: Colors.blue)
-                  ),
+                  child: Text("Add", style: TextStyle(color: Colors.blue)),
                 ),
                 TextButton(
                   onPressed: () => Navigator.pop(context),
-                  child: Text(
-                    "Cancel",
-                    style: TextStyle(color: Colors.blue)
-                  ),
+                  child: Text("Cancel", style: TextStyle(color: Colors.blue)),
                 ),
               ],
             );
@@ -2225,14 +2478,17 @@ class _SyncPageState extends State<SyncPage> {
         await _onewaySync(order.localPath, order.fld_id);
         break;
       case "Two-Way Sync":
-        await _twowaySync(order.localPath, order.fld_id, _findFolderData(syncedFileFolders, order.fld_id));
+        await _twowaySync(
+          order.localPath,
+          order.fld_id,
+          _findFolderData(syncedFileFolders, order.fld_id),
+        );
         break;
     }
 
     dynamic scanedData = await _scanCloudFiles("", "0");
     syncedFileFolders = scanedData;
     _saveGlobal('scaned_data', scanedData);
-
   }
 
   Future<void> _uploadFiles(String localPath, String folderID) async {
@@ -2245,24 +2501,40 @@ class _SyncPageState extends State<SyncPage> {
 
     Directory dir = Directory(localPath);
     if (dir.existsSync()) {
-      localFiles = dir.listSync().whereType<File>().map((e) => e.path.split(Platform.pathSeparator).last).toList();
-      localFolders = dir
-        .listSync()
-        .whereType<Directory>()
-        .map((folder) => folder.path.split(Platform.pathSeparator).last)
-        .toList();
+      localFiles =
+          dir
+              .listSync()
+              .whereType<File>()
+              .map((e) => e.path.split(Platform.pathSeparator).last)
+              .toList();
+      localFolders =
+          dir
+              .listSync()
+              .whereType<Directory>()
+              .map((folder) => folder.path.split(Platform.pathSeparator).last)
+              .toList();
     }
-    
+
     final response = await http.get(
-      Uri.parse('$baseURL/folder/list?fld_id=$folderID&sess_id=${widget.sessionId}'),
+      Uri.parse(
+        '$baseURL/folder/list?fld_id=$folderID&sess_id=${widget.sessionId}',
+      ),
     );
 
     if (response.statusCode == 200) {
       var data = jsonDecode(response.body);
-      cloudFiles = List<String>.from(data['result']['files'].map((file) => file['name']));
-      cloudFileCodes = List<String>.from(data['result']['files'].map((file) => file['file_code']));
-      cloudFolders = List<String>.from(data['result']['folders'].map((file) => file['name']));
-      cloudFolderCodes = List<String>.from(data['result']['folders'].map((file) => file['fld_id'].toString()));
+      cloudFiles = List<String>.from(
+        data['result']['files'].map((file) => file['name']),
+      );
+      cloudFileCodes = List<String>.from(
+        data['result']['files'].map((file) => file['file_code']),
+      );
+      cloudFolders = List<String>.from(
+        data['result']['folders'].map((file) => file['name']),
+      );
+      cloudFolderCodes = List<String>.from(
+        data['result']['folders'].map((file) => file['fld_id'].toString()),
+      );
     }
 
     for (String file in localFiles) {
@@ -2270,7 +2542,10 @@ class _SyncPageState extends State<SyncPage> {
         String filePath = "$localPath${Platform.pathSeparator}$file";
         File uploadFile = File(filePath);
         if (uploadFile.existsSync()) {
-          FileUploader uploader = FileUploader(sessionId: widget.sessionId, serverUrl: uploadServer);
+          FileUploader uploader = FileUploader(
+            sessionId: widget.sessionId,
+            serverUrl: uploadServer,
+          );
           await uploader.uploadFile(filePath, folderID);
         }
       }
@@ -2281,10 +2556,12 @@ class _SyncPageState extends State<SyncPage> {
         String newFoldeId = await createCloudFolder(localFolder, folderID);
         await _uploadFiles("$localPath/$localFolder", newFoldeId);
       } else {
-        await _uploadFiles("$localPath/$localFolder", cloudFolderCodes[cloudFolders.indexOf(localFolder)]);
+        await _uploadFiles(
+          "$localPath/$localFolder",
+          cloudFolderCodes[cloudFolders.indexOf(localFolder)],
+        );
       }
     }
-
   }
 
   Future<void> _downloadFiles(String localPath, String folderID) async {
@@ -2297,24 +2574,40 @@ class _SyncPageState extends State<SyncPage> {
 
     Directory dir = Directory(localPath);
     if (dir.existsSync()) {
-      localFiles = dir.listSync().whereType<File>().map((e) => e.path.split(Platform.pathSeparator).last).toList();
-      localFolders = dir
-        .listSync()
-        .whereType<Directory>()
-        .map((folder) => folder.path.split(Platform.pathSeparator).last)
-        .toList();
+      localFiles =
+          dir
+              .listSync()
+              .whereType<File>()
+              .map((e) => e.path.split(Platform.pathSeparator).last)
+              .toList();
+      localFolders =
+          dir
+              .listSync()
+              .whereType<Directory>()
+              .map((folder) => folder.path.split(Platform.pathSeparator).last)
+              .toList();
     }
-    
+
     final response = await http.get(
-      Uri.parse('$baseURL/folder/list?fld_id=$folderID&sess_id=${widget.sessionId}'),
+      Uri.parse(
+        '$baseURL/folder/list?fld_id=$folderID&sess_id=${widget.sessionId}',
+      ),
     );
 
     if (response.statusCode == 200) {
       var data = jsonDecode(response.body);
-      cloudFiles = List<String>.from(data['result']['files'].map((file) => file['name']));
-      cloudFileCodes = List<String>.from(data['result']['files'].map((file) => file['file_code']));
-      cloudFolders = List<String>.from(data['result']['folders'].map((file) => file['name']));
-      cloudFolderCodes = List<String>.from(data['result']['folders'].map((file) => file['fld_id'].toString()));
+      cloudFiles = List<String>.from(
+        data['result']['files'].map((file) => file['name']),
+      );
+      cloudFileCodes = List<String>.from(
+        data['result']['files'].map((file) => file['file_code']),
+      );
+      cloudFolders = List<String>.from(
+        data['result']['folders'].map((file) => file['name']),
+      );
+      cloudFolderCodes = List<String>.from(
+        data['result']['folders'].map((file) => file['fld_id'].toString()),
+      );
     }
 
     for (int i = 0; i < cloudFiles.length; i++) {
@@ -2333,10 +2626,14 @@ class _SyncPageState extends State<SyncPage> {
     for (int i = 0; i < cloudFolders.length; i++) {
       String cloudFolder = cloudFolders[i];
       String cloudFolderCode = cloudFolderCodes[i];
-      await createFolderIfNotExists("$localPath${Platform.pathSeparator}$cloudFolder");
-      await _downloadFiles("$localPath${Platform.pathSeparator}$cloudFolder", cloudFolderCode);
+      await createFolderIfNotExists(
+        "$localPath${Platform.pathSeparator}$cloudFolder",
+      );
+      await _downloadFiles(
+        "$localPath${Platform.pathSeparator}$cloudFolder",
+        cloudFolderCode,
+      );
     }
-
   }
 
   Future<void> _onewaySync(String localPath, String folderID) async {
@@ -2349,24 +2646,40 @@ class _SyncPageState extends State<SyncPage> {
 
     Directory dir = Directory(localPath);
     if (dir.existsSync()) {
-      localFiles = dir.listSync().whereType<File>().map((e) => e.path.split(Platform.pathSeparator).last).toList();
-      localFolders = dir
-        .listSync()
-        .whereType<Directory>()
-        .map((folder) => folder.path.split(Platform.pathSeparator).last)
-        .toList();
+      localFiles =
+          dir
+              .listSync()
+              .whereType<File>()
+              .map((e) => e.path.split(Platform.pathSeparator).last)
+              .toList();
+      localFolders =
+          dir
+              .listSync()
+              .whereType<Directory>()
+              .map((folder) => folder.path.split(Platform.pathSeparator).last)
+              .toList();
     }
-    
+
     final response = await http.get(
-      Uri.parse('$baseURL/folder/list?fld_id=$folderID&sess_id=${widget.sessionId}'),
+      Uri.parse(
+        '$baseURL/folder/list?fld_id=$folderID&sess_id=${widget.sessionId}',
+      ),
     );
 
     if (response.statusCode == 200) {
       var data = jsonDecode(response.body);
-      cloudFiles = List<String>.from(data['result']['files'].map((file) => file['name']));
-      cloudFileCodes = List<String>.from(data['result']['files'].map((file) => file['file_code']));
-      cloudFolders = List<String>.from(data['result']['folders'].map((file) => file['name']));
-      cloudFolderCodes = List<String>.from(data['result']['folders'].map((file) => file['fld_id'].toString()));
+      cloudFiles = List<String>.from(
+        data['result']['files'].map((file) => file['name']),
+      );
+      cloudFileCodes = List<String>.from(
+        data['result']['files'].map((file) => file['file_code']),
+      );
+      cloudFolders = List<String>.from(
+        data['result']['folders'].map((file) => file['name']),
+      );
+      cloudFolderCodes = List<String>.from(
+        data['result']['folders'].map((file) => file['fld_id'].toString()),
+      );
     }
 
     for (String file in localFiles) {
@@ -2374,7 +2687,10 @@ class _SyncPageState extends State<SyncPage> {
         String filePath = "$localPath${Platform.pathSeparator}$file";
         File uploadFile = File(filePath);
         if (uploadFile.existsSync()) {
-          FileUploader uploader = FileUploader(sessionId: widget.sessionId, serverUrl: uploadServer);
+          FileUploader uploader = FileUploader(
+            sessionId: widget.sessionId,
+            serverUrl: uploadServer,
+          );
           await uploader.uploadFile(filePath, folderID);
         }
       }
@@ -2383,7 +2699,11 @@ class _SyncPageState extends State<SyncPage> {
     for (int i = 0; i < cloudFiles.length; i++) {
       String file = cloudFiles[i];
       if (!localFiles.contains(file)) {
-        await http.get(Uri.parse('$baseURL/file/remove?file_code=${cloudFileCodes[i]}&remove=1&sess_id=${widget.sessionId}'));
+        await http.get(
+          Uri.parse(
+            '$baseURL/file/remove?file_code=${cloudFileCodes[i]}&remove=1&sess_id=${widget.sessionId}',
+          ),
+        );
         print("Deleted from cloud: $file");
       }
     }
@@ -2393,13 +2713,19 @@ class _SyncPageState extends State<SyncPage> {
         String newFoldeId = await createCloudFolder(localFolder, folderID);
         await _onewaySync("$localPath/$localFolder", newFoldeId);
       } else {
-        await _onewaySync("$localPath/$localFolder", cloudFolderCodes[cloudFolders.indexOf(localFolder)]);
+        await _onewaySync(
+          "$localPath/$localFolder",
+          cloudFolderCodes[cloudFolders.indexOf(localFolder)],
+        );
       }
     }
-
   }
 
-  Future<void> _twowaySync(String localPath, String folderID, dynamic folderData) async {
+  Future<void> _twowaySync(
+    String localPath,
+    String folderID,
+    dynamic folderData,
+  ) async {
     List<String> cloudFiles = [];
     List<String> cloudFolders = [];
     List<String> cloudFileCodes = [];
@@ -2423,37 +2749,58 @@ class _SyncPageState extends State<SyncPage> {
       return;
     }
 
-    if (folderData.containsKey('file')) syncFiles = folderData['file'].keys.toList();
-    if (folderData.containsKey('file')) syncFileCodes = folderData['file'].values.toList();
+    if (folderData.containsKey('file'))
+      syncFiles = folderData['file'].keys.toList();
+    if (folderData.containsKey('file'))
+      syncFileCodes = folderData['file'].values.toList();
     if (folderData.containsKey('folder')) syncFolders = folderData['folder'];
 
-    List<String> syncFolderNames = syncFolders.map((folder) => folder['folder_name'] as String).toList();
-    syncFolderCodes = syncFolders.map((folder) => folder['folder_id'] as String).toList();
-    List<dynamic> syncFolderDatas = syncFolders.map((folder) => folder['folder_data'] as dynamic).toList();
+    List<String> syncFolderNames =
+        syncFolders.map((folder) => folder['folder_name'] as String).toList();
+    syncFolderCodes =
+        syncFolders.map((folder) => folder['folder_id'] as String).toList();
+    List<dynamic> syncFolderDatas =
+        syncFolders.map((folder) => folder['folder_data'] as dynamic).toList();
 
     Directory dir = Directory(localPath);
     if (dir.existsSync()) {
-      localFiles = dir.listSync().whereType<File>().map((e) => e.path.split(Platform.pathSeparator).last).toList();
-      localFolders = dir
-        .listSync()
-        .whereType<Directory>()
-        .map((folder) => folder.path.split(Platform.pathSeparator).last)
-        .toList();
+      localFiles =
+          dir
+              .listSync()
+              .whereType<File>()
+              .map((e) => e.path.split(Platform.pathSeparator).last)
+              .toList();
+      localFolders =
+          dir
+              .listSync()
+              .whereType<Directory>()
+              .map((folder) => folder.path.split(Platform.pathSeparator).last)
+              .toList();
     }
 
     final response = await http.get(
-      Uri.parse('$baseURL/folder/list?fld_id=$folderID&sess_id=${widget.sessionId}'),
+      Uri.parse(
+        '$baseURL/folder/list?fld_id=$folderID&sess_id=${widget.sessionId}',
+      ),
     );
 
     if (response.statusCode == 200) {
       var data = jsonDecode(response.body);
-      cloudFiles = List<String>.from(data['result']['files'].map((file) => file['name']));
-      cloudFileCodes = List<String>.from(data['result']['files'].map((file) => file['file_code']));
-      cloudFolders = List<String>.from(data['result']['folders'].map((file) => file['name']));
-      cloudFolderCodes = List<String>.from(data['result']['folders'].map((file) => file['fld_id'].toString()));
+      cloudFiles = List<String>.from(
+        data['result']['files'].map((file) => file['name']),
+      );
+      cloudFileCodes = List<String>.from(
+        data['result']['files'].map((file) => file['file_code']),
+      );
+      cloudFolders = List<String>.from(
+        data['result']['folders'].map((file) => file['name']),
+      );
+      cloudFolderCodes = List<String>.from(
+        data['result']['folders'].map((file) => file['fld_id'].toString()),
+      );
     }
 
-    for (int i = 0; i < cloudFiles.length; i ++) {
+    for (int i = 0; i < cloudFiles.length; i++) {
       String file = cloudFiles[i];
       if (!syncFiles.contains(file)) {
         String downloadLink = await _getDownloadLink(cloudFileCodes[i]);
@@ -2471,20 +2818,27 @@ class _SyncPageState extends State<SyncPage> {
         String filePath = "$localPath${Platform.pathSeparator}$file";
         File uploadFile = File(filePath);
         if (uploadFile.existsSync()) {
-          FileUploader uploader = FileUploader(sessionId: widget.sessionId, serverUrl: uploadServer);
+          FileUploader uploader = FileUploader(
+            sessionId: widget.sessionId,
+            serverUrl: uploadServer,
+          );
           await uploader.uploadFile(filePath, folderID);
         }
       }
     }
 
-    for (int i = 0; i < syncFiles.length; i ++) {
+    for (int i = 0; i < syncFiles.length; i++) {
       String file = syncFiles[i];
-      if(!localFiles.contains(file)) {
+      if (!localFiles.contains(file)) {
         String fileToDeleteCode = syncFileCodes[i];
-        await http.get(Uri.parse('$baseURL/file/remove?file_code=$fileToDeleteCode&remove=1&sess_id=${widget.sessionId}'));
+        await http.get(
+          Uri.parse(
+            '$baseURL/file/remove?file_code=$fileToDeleteCode&remove=1&sess_id=${widget.sessionId}',
+          ),
+        );
         print("Deleted from cloud: $file");
       }
-      if(!cloudFiles.contains(file)) {
+      if (!cloudFiles.contains(file)) {
         String filePath = "$localPath${Platform.pathSeparator}$file";
         final deletefile = File(filePath);
         if (await deletefile.exists()) {
@@ -2496,12 +2850,17 @@ class _SyncPageState extends State<SyncPage> {
       }
     }
 
-    for (int i = 0; i < cloudFolders.length; i ++) {
+    for (int i = 0; i < cloudFolders.length; i++) {
       String folder = cloudFolders[i];
       String folderCode = cloudFolderCodes[i];
       if (!syncFolderNames.contains(folder)) {
-        await createFolderIfNotExists("$localPath${Platform.pathSeparator}$folder");
-        await _downloadFiles("$localPath${Platform.pathSeparator}$folder", folderCode);
+        await createFolderIfNotExists(
+          "$localPath${Platform.pathSeparator}$folder",
+        );
+        await _downloadFiles(
+          "$localPath${Platform.pathSeparator}$folder",
+          folderCode,
+        );
       }
     }
 
@@ -2511,60 +2870,86 @@ class _SyncPageState extends State<SyncPage> {
           String newFoldeId = await createCloudFolder(folder, folderID);
           await _uploadFiles("$localPath/$folder", newFoldeId);
         } else {
-          await _uploadFiles("$localPath/$folder", cloudFolderCodes[cloudFolders.indexOf(folder)]);
+          await _uploadFiles(
+            "$localPath/$folder",
+            cloudFolderCodes[cloudFolders.indexOf(folder)],
+          );
         }
       }
     }
 
-    for (int i = 0; i < syncFolderNames.length; i ++) {
+    for (int i = 0; i < syncFolderNames.length; i++) {
       String folder = syncFolderNames[i];
       if (!localFolders.contains(folder)) {
         await _deleteCloudFolder(syncFolderCodes[i]);
       } else if (!cloudFolders.contains(folder)) {
         await _deleteLocalFolder("$localPath/$folder");
       } else {
-        await _twowaySync("$localPath/$folder", syncFolderCodes[i], syncFolderDatas[i]);
+        await _twowaySync(
+          "$localPath/$folder",
+          syncFolderCodes[i],
+          syncFolderDatas[i],
+        );
       }
     }
-
   }
 
   Future<dynamic> _scanCloudFiles(String folderName, String fldID) async {
     dynamic scanedData = {};
     // Update synced files.
     final response = await http.get(
-      Uri.parse('$baseURL/folder/list?fld_id=$fldID&sess_id=${widget.sessionId}'),
+      Uri.parse(
+        '$baseURL/folder/list?fld_id=$fldID&sess_id=${widget.sessionId}',
+      ),
     );
 
     if (response.statusCode == 200) {
       var data = jsonDecode(response.body);
-      List<String> cloudFiles = List<String>.from(data['result']['files'].map((file) => file['name']));
-      List<String> cloudFileCodes = List<String>.from(data['result']['files'].map((file) => file['file_code'].toString()));
-      List<String> cloudFolders = List<String>.from(data['result']['folders'].map((file) => file['name']));
-      List<String> cloudFolderIDs = List<String>.from(data['result']['folders'].map((file) => file['fld_id'].toString()));
-      scanedData['file'] = cloudFiles.asMap().map((i, f) => MapEntry(f, cloudFileCodes[i]));
+      List<String> cloudFiles = List<String>.from(
+        data['result']['files'].map((file) => file['name']),
+      );
+      List<String> cloudFileCodes = List<String>.from(
+        data['result']['files'].map((file) => file['file_code'].toString()),
+      );
+      List<String> cloudFolders = List<String>.from(
+        data['result']['folders'].map((file) => file['name']),
+      );
+      List<String> cloudFolderIDs = List<String>.from(
+        data['result']['folders'].map((file) => file['fld_id'].toString()),
+      );
+      scanedData['file'] = cloudFiles.asMap().map(
+        (i, f) => MapEntry(f, cloudFileCodes[i]),
+      );
       scanedData['folder'] = [];
-      for (int i = 0; i < cloudFolders.length; i ++) {
+      for (int i = 0; i < cloudFolders.length; i++) {
         String cloudFolder = cloudFolders[i];
         String cloudFolderID = cloudFolderIDs[i];
-        dynamic cloudFolderData = await _scanCloudFiles(cloudFolder, cloudFolderID);
+        dynamic cloudFolderData = await _scanCloudFiles(
+          cloudFolder,
+          cloudFolderID,
+        );
         scanedData['folder'].add(cloudFolderData);
       }
     }
-    return {"folder_name": folderName, "folder_id": fldID, "folder_data": scanedData};
-
+    return {
+      "folder_name": folderName,
+      "folder_id": fldID,
+      "folder_data": scanedData,
+    };
   }
 
   dynamic _findFolderData(dynamic fileFolder, String fldID) {
     // Check if fileFolder is empty
-    if (fileFolder.isEmpty) return null; // Changed to return null for easier checks
+    if (fileFolder.isEmpty)
+      return null; // Changed to return null for easier checks
 
     // Check if the current folder matches the fldID
     if (fileFolder['folder_id'] == fldID) return fileFolder['folder_data'];
 
     // Check if folder_data exists and is a map
-    if (!fileFolder.containsKey('folder_data') || 
-        fileFolder['folder_data'] is! Map) return null;
+    if (!fileFolder.containsKey('folder_data') ||
+        fileFolder['folder_data'] is! Map)
+      return null;
 
     // Iterate over the list of folders in folder_data
     var folders = fileFolder['folder_data']['folder'];
@@ -2579,7 +2964,7 @@ class _SyncPageState extends State<SyncPage> {
   }
 
   Future<void> _deleteLocalFolder(String folderPath) async {
-      // Create a Directory object
+    // Create a Directory object
     var directory = Directory(folderPath);
 
     // Check if the directory exists
@@ -2594,7 +2979,9 @@ class _SyncPageState extends State<SyncPage> {
 
   Future<void> _deleteCloudFolder(String folderID) async {
     final response = await http.get(
-      Uri.parse('$baseURL/folder/delete?fld_id=$folderID&sess_id=${widget.sessionId}'),
+      Uri.parse(
+        '$baseURL/folder/delete?fld_id=$folderID&sess_id=${widget.sessionId}',
+      ),
     );
     if (response.statusCode == 200) {
       print("Successfully delete cloud folder $folderID.");
@@ -2603,7 +2990,9 @@ class _SyncPageState extends State<SyncPage> {
 
   Future<String> _getDownloadLink(String fileCode) async {
     final response = await http.get(
-      Uri.parse('$baseURL/file/direct_link?file_code=$fileCode&sess_id=${widget.sessionId}'),
+      Uri.parse(
+        '$baseURL/file/direct_link?file_code=$fileCode&sess_id=${widget.sessionId}',
+      ),
     );
     if (response.statusCode == 200) {
       var data = jsonDecode(response.body);
@@ -2614,20 +3003,28 @@ class _SyncPageState extends State<SyncPage> {
 
   Future<String> getFolderID(String folderName, String parentFolderID) async {
     final response = await http.get(
-      Uri.parse('$baseURL/folder/list?fld_id=$parentFolderID&sess_id=${widget.sessionId}'),
+      Uri.parse(
+        '$baseURL/folder/list?fld_id=$parentFolderID&sess_id=${widget.sessionId}',
+      ),
     );
     if (response.statusCode == 200) {
       var data = jsonDecode(response.body);
-      List<String> cloudFolders = List<String>.from(data['result']['folders'].map((file) => file['name']));
-      List<String> cloudFolderCodes = List<String>.from(data['result']['folders'].map((file) => file['fld_id'].toString()));
-      for (int i = 0; i < cloudFolders.length; i ++) {
+      List<String> cloudFolders = List<String>.from(
+        data['result']['folders'].map((file) => file['name']),
+      );
+      List<String> cloudFolderCodes = List<String>.from(
+        data['result']['folders'].map((file) => file['fld_id'].toString()),
+      );
+      for (int i = 0; i < cloudFolders.length; i++) {
         if (cloudFolders[i] == folderName) {
           return cloudFolderCodes[i];
         }
       }
     }
     final response1 = await http.get(
-      Uri.parse('$baseURL/folder/create?parent_id=$parentFolderID&name=$folderName&sess_id=${widget.sessionId}'),
+      Uri.parse(
+        '$baseURL/folder/create?parent_id=$parentFolderID&name=$folderName&sess_id=${widget.sessionId}',
+      ),
     );
     if (response1.statusCode == 200) {
       var data = jsonDecode(response1.body);
@@ -2639,7 +3036,9 @@ class _SyncPageState extends State<SyncPage> {
   Future<String> createCloudFolder(String localFolder, String parentId) async {
     print(localFolder);
     final response = await http.get(
-      Uri.parse('$baseURL/folder/create?parent_id=$parentId&name=$localFolder&sess_id=${widget.sessionId}')
+      Uri.parse(
+        '$baseURL/folder/create?parent_id=$parentId&name=$localFolder&sess_id=${widget.sessionId}',
+      ),
     );
     if (response.statusCode == 200) {
       var data = jsonDecode(response.body);
@@ -2671,8 +3070,9 @@ class _SyncPageState extends State<SyncPage> {
       return path;
     }
     int startLength = (maxLength ~/ 2) - 1; // Length of the start part
-    int endLength = maxLength - startLength - 3; // Length of the end part (for "...")
-    
+    int endLength =
+        maxLength - startLength - 3; // Length of the end part (for "...")
+
     return '${path.substring(0, startLength)}...${path.substring(path.length - endLength)}';
   }
 
@@ -2682,86 +3082,113 @@ class _SyncPageState extends State<SyncPage> {
       backgroundColor: Colors.white,
       appBar: AppBar(
         backgroundColor: Colors.white,
-        title: Text('Sync Files & Folders')
+        title: Text('Sync Files & Folders'),
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: _showAddSyncOrderDialog,
         backgroundColor: Colors.blue,
         child: Icon(Icons.add, color: Colors.white),
       ),
-      body: isLoading
-            ? Center(child: CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(Colors.blue)),) // Show loading indicator
-            : Column(
-        children: [
-          Expanded(
-            child: ListView.builder(
-              itemCount: syncOrders.length,
-              itemBuilder: (context, index) {
-                final order = syncOrders[index];
-                return Container(
-                  margin: EdgeInsets.symmetric(vertical: 8.0), // Space between items
-                  decoration: BoxDecoration(
-                    border: Border.all(color: Colors.grey, width: 1), // Border color and width
-                    borderRadius: BorderRadius.circular(8.0), // Rounded corners
-                    color: Colors.white, // Background color
-                  ),
-                  child: ListTile(
-                    title: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        // Sync Icon
-                        Icon(
-                          order.syncType == "Upload Only" ? Icons.upload : 
-                          order.syncType == "Download Only" ? Icons.download : 
-                          order.syncType == "One-Way Sync" ? Icons.arrow_forward_ios : 
-                          order.syncType == "Two-Way Sync" ? Icons.sync : 
-                          Icons.info, // Default icon if neither condition matches
-                          color: Colors.blue,
-                        ),
-                        // Column for Remote and Local Paths
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              order.remotePath,
-                              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+      body:
+          isLoading
+              ? Center(
+                child: CircularProgressIndicator(
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.blue),
+                ),
+              ) // Show loading indicator
+              : Column(
+                children: [
+                  Expanded(
+                    child: ListView.builder(
+                      itemCount: syncOrders.length,
+                      itemBuilder: (context, index) {
+                        final order = syncOrders[index];
+                        return Container(
+                          margin: EdgeInsets.symmetric(
+                            vertical: 8.0,
+                          ), // Space between items
+                          decoration: BoxDecoration(
+                            border: Border.all(
+                              color: Colors.grey,
+                              width: 1,
+                            ), // Border color and width
+                            borderRadius: BorderRadius.circular(
+                              8.0,
+                            ), // Rounded corners
+                            color: Colors.white, // Background color
+                          ),
+                          child: ListTile(
+                            title: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                // Sync Icon
+                                Icon(
+                                  order.syncType == "Upload Only"
+                                      ? Icons.upload
+                                      : order.syncType == "Download Only"
+                                      ? Icons.download
+                                      : order.syncType == "One-Way Sync"
+                                      ? Icons.arrow_forward_ios
+                                      : order.syncType == "Two-Way Sync"
+                                      ? Icons.sync
+                                      : Icons
+                                          .info, // Default icon if neither condition matches
+                                  color: Colors.blue,
+                                ),
+                                // Column for Remote and Local Paths
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      order.remotePath,
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                    Text(
+                                      abbreviate(order.localPath),
+                                      overflow: TextOverflow.ellipsis,
+                                      maxLines: 1,
+                                    ),
+                                  ],
+                                ),
+                                SizedBox(width: 10), // Space between sections
+                                // Column for Action Buttons
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    // Start/Stop Button
+                                    IconButton(
+                                      icon: Icon(
+                                        order.isRunning
+                                            ? Icons.pause
+                                            : Icons.play_arrow,
+                                        color: Colors.blue,
+                                      ),
+                                      onPressed: () => _toggleSync(index),
+                                    ),
+                                    // Delete Button
+                                    IconButton(
+                                      icon: Icon(
+                                        Icons.delete,
+                                        color: Colors.black,
+                                      ),
+                                      onPressed: () => _deleteSyncOrder(index),
+                                    ),
+                                  ],
+                                ),
+                              ],
                             ),
-                            Text(
-                              abbreviate(order.localPath),
-                              overflow: TextOverflow.ellipsis,
-                              maxLines: 1,
-                            ),
-                          ],
-                        ),
-                        SizedBox(width: 10), // Space between sections
-                        // Column for Action Buttons
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            // Start/Stop Button
-                            IconButton(
-                              icon: Icon(order.isRunning ? Icons.pause : Icons.play_arrow, color: Colors.blue),
-                              onPressed: () => _toggleSync(index),
-                            ),
-                            // Delete Button
-                            IconButton(
-                              icon: Icon(Icons.delete, color: Colors.black),
-                              onPressed: () => _deleteSyncOrder(index),
-                            ),
-                          ],
-                        ),
-                      ],
+                          ),
+                        );
+                      },
                     ),
                   ),
-                );
-              },
-            ),
-          ),
-        ],
-      ),
+                ],
+              ),
     );
   }
-
 }
 
 class UploadPage extends StatefulWidget {
@@ -2807,49 +3234,64 @@ class _UploadPageState extends State<UploadPage> {
     }
   }
 
-  Future<void> uploadFiles() async{
+  Future<void> uploadFiles() async {
     if (selectedFiles.isEmpty) return;
     setState(() {
       isLoading = true;
       uploadProgress = 0.0;
     });
-    FileUploader uploader = FileUploader(sessionId: widget.sessionId, serverUrl: uploadServer);
-    for (int i = 0; i< selectedFiles.length; i ++) {
+    FileUploader uploader = FileUploader(
+      sessionId: widget.sessionId,
+      serverUrl: uploadServer,
+    );
+    for (int i = 0; i < selectedFiles.length; i++) {
       String filePath = selectedFiles[i];
       print("File $filePath is uploading now...");
       await uploader.uploadFile(filePath, "0");
       print("File $filePath is uploaded.");
-      uploadedItemCounts ++;
+      uploadedItemCounts++;
     }
     setState(() {
       selectedFiles = [];
       isLoading = false;
     });
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text("Files uploaded successfully!")),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text("Files uploaded successfully!")));
   }
 
   Future<void> timer() async {
     if (selectedFiles.isNotEmpty && isLoading == true) {
       setState(() {
-        uploadProgress = min(uploadProgress + 0.005, (uploadedItemCounts + 1) / selectedFiles.length - 0.05);
-        uploadProgress = max(uploadProgress, uploadedItemCounts / selectedFiles.length);
+        uploadProgress = min(
+          uploadProgress + 0.005,
+          (uploadedItemCounts + 1) / selectedFiles.length - 0.05,
+        );
+        uploadProgress = max(
+          uploadProgress,
+          uploadedItemCounts / selectedFiles.length,
+        );
       });
     }
     await Future.delayed(Duration(milliseconds: 50)); // Simulated delay
     timer();
   }
-  
+
   Future<String> getFolderID(String folderName, String parentFolderID) async {
     final response = await http.get(
-      Uri.parse('$baseURL/folder/list?fld_id=$parentFolderID&sess_id=${widget.sessionId}'),
+      Uri.parse(
+        '$baseURL/folder/list?fld_id=$parentFolderID&sess_id=${widget.sessionId}',
+      ),
     );
     if (response.statusCode == 200) {
       var data = jsonDecode(response.body);
-      List<String> cloudFolders = List<String>.from(data['result']['folders'].map((file) => file['name']));
-      List<String> cloudFolderCodes = List<String>.from(data['result']['folders'].map((file) => file['fld_id'].toString()));
-      for (int i = 0; i < cloudFolders.length; i ++) {
+      List<String> cloudFolders = List<String>.from(
+        data['result']['folders'].map((file) => file['name']),
+      );
+      List<String> cloudFolderCodes = List<String>.from(
+        data['result']['folders'].map((file) => file['fld_id'].toString()),
+      );
+      for (int i = 0; i < cloudFolders.length; i++) {
         if (cloudFolders[i] == folderName) {
           return cloudFolderCodes[i];
         }
@@ -2882,12 +3324,18 @@ class _UploadPageState extends State<UploadPage> {
   }
 
   Future<void> moveFile(String fileCode, String folderID) async {
-    await http.get(Uri.parse('$baseURL/file/set_folder?file_code=$fileCode&fld_id=$folderID&sess_id=${widget.sessionId}'));
+    await http.get(
+      Uri.parse(
+        '$baseURL/file/set_folder?file_code=$fileCode&fld_id=$folderID&sess_id=${widget.sessionId}',
+      ),
+    );
   }
 
   Future<String> createCloudFolder(String localFolder, String parentId) async {
     final response = await http.get(
-      Uri.parse('$baseURL/folder/create?parent_id=$parentId&name=$localFolder&sess_id=${widget.sessionId}')
+      Uri.parse(
+        '$baseURL/folder/create?parent_id=$parentId&name=$localFolder&sess_id=${widget.sessionId}',
+      ),
     );
     if (response.statusCode == 200) {
       var data = jsonDecode(response.body);
@@ -2902,7 +3350,7 @@ class _UploadPageState extends State<UploadPage> {
       backgroundColor: Colors.white,
       appBar: AppBar(
         backgroundColor: Colors.white,
-        title: Text('Upload Files')
+        title: Text('Upload Files'),
       ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
@@ -2924,7 +3372,9 @@ class _UploadPageState extends State<UploadPage> {
                 itemCount: selectedFiles.length,
                 itemBuilder: (context, index) {
                   return ListTile(
-                    title: Text(selectedFiles[index].split(r'\').last.split('/').last),
+                    title: Text(
+                      selectedFiles[index].split(r'\').last.split('/').last,
+                    ),
                   );
                 },
               ),
@@ -2932,7 +3382,10 @@ class _UploadPageState extends State<UploadPage> {
             if (isLoading) // Show progress bar when uploading
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 10.0),
-                child: LinearProgressIndicator(value: uploadProgress, color: Colors.blue,),
+                child: LinearProgressIndicator(
+                  value: uploadProgress,
+                  color: Colors.blue,
+                ),
               ),
             ElevatedButton(
               onPressed: isLoading ? null : uploadFiles,
@@ -2941,7 +3394,9 @@ class _UploadPageState extends State<UploadPage> {
               ), // Disable button while uploading
               child: Text(
                 'Upload Files',
-                style: TextStyle(color: Colors.white), // Set text color to white
+                style: TextStyle(
+                  color: Colors.white,
+                ), // Set text color to white
               ),
             ),
           ],
@@ -2949,7 +3404,6 @@ class _UploadPageState extends State<UploadPage> {
       ),
     );
   }
-
 }
 
 class VideoPlayerScreen extends StatefulWidget {
@@ -2984,20 +3438,28 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     return Scaffold(
       appBar: AppBar(title: Text("Video Player")),
       body: Center(
-        child: _controller.value.isInitialized
-            ? AspectRatio(
-                aspectRatio: _controller.value.aspectRatio,
-                child: VideoPlayer(_controller),
-              )
-            : CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(Colors.blue)),
+        child:
+            _controller.value.isInitialized
+                ? AspectRatio(
+                  aspectRatio: _controller.value.aspectRatio,
+                  child: VideoPlayer(_controller),
+                )
+                : CircularProgressIndicator(
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.blue),
+                ),
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () {
           setState(() {
-            _controller.value.isPlaying ? _controller.pause() : _controller.play();
+            _controller.value.isPlaying
+                ? _controller.pause()
+                : _controller.play();
           });
         },
-        child: Icon(_controller.value.isPlaying ? Icons.pause : Icons.play_arrow, color: Colors.blue),
+        child: Icon(
+          _controller.value.isPlaying ? Icons.pause : Icons.play_arrow,
+          color: Colors.blue,
+        ),
       ),
     );
   }
@@ -3008,6 +3470,7 @@ class FileUploader {
   final String sessionId;
 
   FileUploader({required this.sessionId, required this.serverUrl});
+
   /// Fetch available upload server URL at startup
 
   /// Upload file to server
@@ -3034,16 +3497,16 @@ class FileUploader {
 
     if (response.statusCode == 200) {
       var data = jsonDecode(response.body);
-      cloudFiles = List<String>.from(data['result']['files'].map((file) => file['name']));
+      cloudFiles = List<String>.from(
+        data['result']['files'].map((file) => file['name']),
+      );
     }
-    if(cloudFiles.contains(filePath.split('/').last.split(r'\').last)) return "";
+    if (cloudFiles.contains(filePath.split('/').last.split(r'\').last))
+      return "";
 
     try {
       var request = http.MultipartRequest('POST', Uri.parse(serverUrl!));
-      request.fields.addAll({
-        'utype': 'prem',
-        'sess_id': sessionId,
-      });
+      request.fields.addAll({'utype': 'prem', 'sess_id': sessionId});
 
       request.files.add(await http.MultipartFile.fromPath('file_0', filePath));
 
@@ -3063,20 +3526,30 @@ class FileUploader {
     }
     return "";
   }
-  
+
   Future<void> moveFile(String fileCode, String folderID) async {
-    await http.get(Uri.parse('$baseURL/file/set_folder?file_code=$fileCode&fld_id=$folderID&sess_id=$sessionId'));
+    await http.get(
+      Uri.parse(
+        '$baseURL/file/set_folder?file_code=$fileCode&fld_id=$folderID&sess_id=$sessionId',
+      ),
+    );
   }
 
   Future<String> getFolderID(String folderName, String parentFolderID) async {
     final response = await http.get(
-      Uri.parse('$baseURL/folder/list?fld_id=$parentFolderID&sess_id=$sessionId'),
+      Uri.parse(
+        '$baseURL/folder/list?fld_id=$parentFolderID&sess_id=$sessionId',
+      ),
     );
     if (response.statusCode == 200) {
       var data = jsonDecode(response.body);
-      List<String> cloudFolders = List<String>.from(data['result']['folders'].map((folder) => folder['name']));
-      List<String> cloudFolderCodes = List<String>.from(data['result']['folders'].map((folder) => folder['fld_id'].toString()));
-      for (int i = 0; i < cloudFolders.length; i ++) {
+      List<String> cloudFolders = List<String>.from(
+        data['result']['folders'].map((folder) => folder['name']),
+      );
+      List<String> cloudFolderCodes = List<String>.from(
+        data['result']['folders'].map((folder) => folder['fld_id'].toString()),
+      );
+      for (int i = 0; i < cloudFolders.length; i++) {
         if (cloudFolders[i] == folderName) {
           return cloudFolderCodes[i];
         }
@@ -3087,7 +3560,9 @@ class FileUploader {
 
   Future<String> createCloudFolder(String localFolder, String parentId) async {
     final response = await http.get(
-      Uri.parse('$baseURL/folder/create?parent_id=$parentId&name=$localFolder&sess_id=$sessionId')
+      Uri.parse(
+        '$baseURL/folder/create?parent_id=$parentId&name=$localFolder&sess_id=$sessionId',
+      ),
     );
     if (response.statusCode == 200) {
       var data = jsonDecode(response.body);
@@ -3095,7 +3570,6 @@ class FileUploader {
     }
     return "";
   }
-
 }
 
 void _fileWatcher(SendPort sendPort) async {
@@ -3126,8 +3600,10 @@ void _filefolderWatcher(SendPort sendPort) async {
 
   // Function to recursively watch subdirectories
   void watchSubdirectories(Directory dir) {
-    try{
-      dir.list(recursive: false, followLinks: false).listen((FileSystemEntity entity) {
+    try {
+      dir.list(recursive: false, followLinks: false).listen((
+        FileSystemEntity entity,
+      ) {
         if (entity is Directory) {
           if (entity.path.split('/').last == "DCIM1") return;
           if (entity.path.split('/').last == "Android") return;
@@ -3153,7 +3629,6 @@ void _filefolderWatcher(SendPort sendPort) async {
     } catch (e) {
       print('Error while watching subdirectory $dir: $e');
     }
-    
   }
 
   // Watch the main directory
@@ -3176,4 +3651,3 @@ void _filefolderWatcher(SendPort sendPort) async {
   // Watch the subdirectories
   watchSubdirectories(directory);
 }
-
