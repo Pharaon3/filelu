@@ -97,6 +97,11 @@ class MyApp extends StatelessWidget {
       title: 'FileLu Sync',
       theme: ThemeData(
         primarySwatch: Colors.blue,
+        textSelectionTheme: TextSelectionThemeData(
+          cursorColor: Colors.blue, // Cursor color
+          selectionColor: Colors.blue.withOpacity(0.5), // Selection background color
+          selectionHandleColor: Colors.blue, // Handle color
+        ),
       ),
       home: FutureBuilder<String?>(
         future: getSessionId(),
@@ -1195,7 +1200,7 @@ class _MyFilesPageState extends State<MyFilesPage> {
                 setState(() {
                   isLoading = true;
                 });
-                await mainFeature._renameFile(item, controller.text);
+                await mainFeature.renameFile(item, controller.text);
                 await _fetchFilesAndFolders(visitedFolderIDs.last.first);
                 setState(() {
                   isLoading = false; // Start loading
@@ -1276,7 +1281,7 @@ class _MyFilesPageState extends State<MyFilesPage> {
           );
           if (response1.statusCode == 200) {
             String copiedFolderID = jsonDecode(response.body)['result']['fld_id'].toString();
-            mainFeature._renameFile(jsonDecode(response.body)['result'], copiedFileFolder['name']);
+            mainFeature.renameFile(jsonDecode(response.body)['result'], copiedFileFolder['name']);
             print('Successfully copied.');
           } else {
             print("Failed to paste folder, it's cloned to the root directory.");
@@ -3275,7 +3280,7 @@ class MainFeature {
     }
   }
 
-  Future<void> _renameFile(dynamic item, String newName) async {
+  Future<void> renameFile(dynamic item, String newName) async {
     final response;
     if (item.containsKey('file_code')) {
       String fileCode = item['file_code'].toString();
