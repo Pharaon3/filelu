@@ -925,17 +925,21 @@ class _MyFilesPageState extends State<MyFilesPage> {
           },
           onRemove: () async {
             Navigator.pop(context);
+            setState(() {
+              isLoading = true;
+            });
             if (item != "") {
-              await _removeFile(item);
+              await mainFeature._removeFile(item);
             } else {
               for (dynamic selectedItem in selectedItems) {
-                await _removeFile(selectedItem);
+                await mainFeature._removeFile(selectedItem);
               }
-              setState(() {
-                selectedItems = [];
-                isLoading = false;
-              });
             }
+            setState(() {
+              selectedItems = [];
+              isLoading = false;
+            });
+            _fetchFilesAndFolders(visitedFolderIDs.last.first.toString());
           },
         );
       },
@@ -1318,37 +1322,6 @@ class _MyFilesPageState extends State<MyFilesPage> {
     }
     copyStatus = 0;
     copiedFileFolders = [];
-    _fetchFilesAndFolders(visitedFolderIDs.last.first.toString());
-  }
-
-  Future<void> _removeFile(dynamic item) async {
-    setState(() {
-      isLoading = true; // Start loading
-    });
-    print(item);
-    if(item.containsKey('file_code')) {
-      String fileCode = item['file_code'].toString();
-      final response = await http.get(
-        Uri.parse('$baseURL/file/remove?file_code=$fileCode&remove=1&sess_id=${mainFeature.sessionId}'),
-      );
-      if (response.statusCode == 200) {
-        print('Successfully removed.');
-      } else {
-        print("Failed to remove.");
-      }
-    } else {
-      String folderID = item['fld_id'].toString();
-      final response = await http.get(
-        Uri.parse('$baseURL/folder/delete?fld_id=$folderID&sess_id=${mainFeature.sessionId}'),
-      );
-      print(folderID);
-      print(mainFeature.sessionId);
-      if (response.statusCode == 200) {
-        print('Successfully removed.');
-      } else {
-        print("Failed to remove.");
-      }
-    }
     _fetchFilesAndFolders(visitedFolderIDs.last.first.toString());
   }
 
@@ -3297,6 +3270,31 @@ class MainFeature {
     } else {
       print('Failed to load folders and files');
       return [];
+    }
+  }
+
+  Future<void> _removeFile(dynamic item) async {
+    print(item);
+    if(item.containsKey('file_code')) {
+      String fileCode = item['file_code'].toString();
+      final response = await http.get(
+        Uri.parse('$baseURL/file/remove?file_code=$fileCode&remove=1&sess_id=$sessionId'),
+      );
+      if (response.statusCode == 200) {
+        print('Successfully removed.');
+      } else {
+        print("Failed to remove.");
+      }
+    } else {
+      String folderID = item['fld_id'].toString();
+      final response = await http.get(
+        Uri.parse('$baseURL/folder/delete?fld_id=$folderID&sess_id=$sessionId'),
+      );
+      if (response.statusCode == 200) {
+        print('Successfully removed.');
+      } else {
+        print("Failed to remove.");
+      }
     }
   }
 
