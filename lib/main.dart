@@ -17,7 +17,6 @@ const String baseURL = "https://filelu.com/api";
 
 void main() {
   runApp(MyApp());
-
 }
 
 class MyApp extends StatelessWidget {
@@ -123,7 +122,7 @@ class MyApp extends StatelessWidget {
                     ),
                   );
                 } else if (passwordSnapshot.data == true) {
-                  return MyFilesPage(sessionId: snapshot.data!);
+                  return MainPage(sessionId: snapshot.data!);
                 } else {
                   return LoginPage();
                 }
@@ -304,7 +303,7 @@ class _OtpPageState extends State<OtpPage> {
         setSessionId(sessionId);
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (context) => MyFilesPage(sessionId: sessionId)),
+          MaterialPageRoute(builder: (context) => MainPage(sessionId: sessionId)),
         );
       } else {
         print('Failed to start session');
@@ -351,18 +350,91 @@ class _OtpPageState extends State<OtpPage> {
 
 }
 
-class MyFilesPage extends StatefulWidget {
+class MainPage extends StatefulWidget {
   final String sessionId;
-  MyFilesPage({required this.sessionId});
+  MainPage({required this.sessionId});
 
   @override
-  _MyFilesPageState createState() => _MyFilesPageState();
+  _MainPageState createState() => _MainPageState();
+}
+
+class _MainPageState extends State<MainPage> {
+  int _tabSelected = 0;
+  MainFeature mainFeature = MainFeature();
+
+  @override
+  void initState() {
+    super.initState();
+  }
+
+  // Handle navigation between pages
+  void _onItemTapped(int index) {
+    setState(() {
+      _tabSelected = index;
+    });
+  }
+
+  // Display different pages based on navigation selection
+  Widget _getPageContent() {
+    switch (_tabSelected) {
+      case 0:
+        return MyFilesPage(mainFeature: mainFeature,);
+      case 1:
+        return SyncPage(mainFeature: mainFeature,);
+      case 2:
+        return UploadPage(mainFeature: mainFeature,);
+      case 3:
+        return UploadPage(mainFeature: mainFeature,);
+      default:
+        return MyFilesPage(mainFeature: mainFeature,);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: _getPageContent(),
+      bottomNavigationBar: BottomNavigationBar(
+        backgroundColor: Colors.white,
+        currentIndex: _tabSelected,
+        selectedItemColor: Colors.blue,
+        unselectedItemColor: Colors.grey, // Set the color for unselected items
+        onTap: _onItemTapped,
+        items: [
+          BottomNavigationBarItem(
+            icon: Icon(Icons.folder),
+            label: 'My Files',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.sync),
+            label: 'Sync',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.upload),
+            label: 'Transfer',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.account_box),
+            label: 'Account',
+          ),
+        ],
+      ),
+    );
+  }
+
+}
+
+class MyFilesPage extends StatefulWidget {
+  final MainFeature mainFeature;
+  MyFilesPage({required this.mainFeature});
+
+  @override
+  _MyFilesPageState createState() => _MyFilesPageState(mainFeature: mainFeature);
 }
 
 class _MyFilesPageState extends State<MyFilesPage> {
   List<dynamic> folders = [];
   List<dynamic> files = [];
-  int _selectedIndex = 0; // For bottom navigation index
   List<dynamic> visitedFolderIDs = [[0, '/'], [0, '/']];
   List<dynamic> copiedFileFolders = [];
   int copyStatus = 0; // 0: empty, 1: copied 2: moved
@@ -376,42 +448,28 @@ class _MyFilesPageState extends State<MyFilesPage> {
   String errorMessage = "";
   Isolate? _backgroundIsolate;
   bool fromToday = false;
+  final MainFeature mainFeature;
   DateTime lastBackupDate = DateTime.now();
+
+  _MyFilesPageState({required this.mainFeature});
 
   @override
   void initState() {
     super.initState();
     _fetchFilesAndFolders(0);
-    _initializeServerUrl();
     _loadSettings();
-  }
-
-  Future<void> _initializeServerUrl() async {
-    try {
-      final response = await http.get(
-        Uri.parse('$baseURL/upload/server?sess_id=${widget.sessionId}'),
-      );
-
-      if (response.statusCode == 200) {
-        var data = jsonDecode(response.body);
-        uploadServer = data['result'];
-        print("Upload server initialized: $uploadServer");
-      } else {
-        print("Failed to get upload server: ${response.reasonPhrase}");
-      }
-    } catch (e) {
-      print("Error fetching upload server: $e");
-    }
   }
 
   // Fetch files and folders using the API
   Future<void> _fetchFilesAndFolders(fldId) async {
-    print('fetch file folder of which folder id is $fldId.');
     setState(() {
       isLoading = true; // Start loading
     });
+    await mainFeature.initState();
+    print('fetch file folder of which folder id is $fldId.');
+    print('sessionId is ${mainFeature.sessionId}.');
     final response = await http.get(
-      Uri.parse('$baseURL/folder/list?fld_id=${fldId.toString()}&sess_id=${widget.sessionId}'),
+      Uri.parse('$baseURL/folder/list?fld_id=${fldId.toString()}&sess_id=${mainFeature.sessionId}'),
     );
 
     if (response.statusCode == 200) {
@@ -430,7 +488,7 @@ class _MyFilesPageState extends State<MyFilesPage> {
 
   Future<String> _getDownloadLink(fileCode) async {
     final response = await http.get(
-      Uri.parse('$baseURL/file/direct_link?file_code=$fileCode&sess_id=${widget.sessionId}')
+      Uri.parse('$baseURL/file/direct_link?file_code=$fileCode&sess_id=${mainFeature.sessionId}')
     );
 
     if (response.statusCode == 200) {
@@ -468,27 +526,6 @@ class _MyFilesPageState extends State<MyFilesPage> {
       return "$home/Downloads/$subpath"; // Add subpath here if needed
     } else {
       throw Exception("Unsupported platform");
-    }
-  }
-
-  // Handle navigation between pages
-  void _onItemTapped(int index) {
-    setState(() {
-      _selectedIndex = index;
-    });
-  }
-
-  // Display different pages based on navigation selection
-  Widget _getPageContent() {
-    switch (_selectedIndex) {
-      case 0:
-        return _buildFileFolderList();
-      case 1:
-        return _buildSyncPage();
-      case 2:
-        return UploadPage(sessionId: widget.sessionId,);
-      default:
-        return _buildFileFolderList();
     }
   }
 
@@ -823,11 +860,6 @@ class _MyFilesPageState extends State<MyFilesPage> {
   
   }
 
-  // Display file/folder list with options
-  Widget _buildSyncPage() {
-    return SyncPage(sessionId: widget.sessionId,);
-  }
-
   // Show options (Rename, Copy, Move To, Download, Remove) for file/folder
   void _showOptions(BuildContext context, dynamic item) {
     showModalBottomSheet(
@@ -854,18 +886,30 @@ class _MyFilesPageState extends State<MyFilesPage> {
             setState(() {
               isLoading = true;
             });
+            String subpath = visitedFolderIDs
+              .map((entry) => entry[1])
+              .where((path) => path.isNotEmpty)
+              .join('/');
             if (item != "") {
               if (item.containsKey('file_code')) {
-                await downloadFile(item['file_code'], item['name'], "");
+                mainFeature.adddownloadingQueue([{
+                  "fileCode": item['file_code'], 
+                  "fileName": item['name'], 
+                  "filePath": subpath
+                }]);
               } else {
-                await downloadFolder(item['fld_id'], item['name']);
+                await mainFeature.downloadFolder(item['fld_id'], item['name'], subpath);
               }
             } else {
               for (dynamic selectedItem in selectedItems) {
                 if (selectedItem.containsKey('file_code')) {
-                  await downloadFile(selectedItem['file_code'], selectedItem['name'], "");
+                  mainFeature.adddownloadingQueue([{
+                    "fileCode": selectedItem['file_code'], 
+                    "fileName": selectedItem['name'], 
+                    "filePath": subpath
+                  }]);
                 } else {
-                  await downloadFolder(selectedItem['fld_id'], selectedItem['name']);
+                  await mainFeature.downloadFolder(selectedItem['fld_id'], selectedItem['name'], subpath);
                 }
               }
             }
@@ -1052,6 +1096,8 @@ class _MyFilesPageState extends State<MyFilesPage> {
       await _fetchFilesAndFolders(visitedFolderIDs.last.first);
     } catch (e) {
       print(e);
+      _fetchFilesAndFolders(0);
+      visitedFolderIDs = [[0, '/'], [0, '/']];
     }
   }
 
@@ -1160,12 +1206,12 @@ class _MyFilesPageState extends State<MyFilesPage> {
     if (item.containsKey('file_code')) {
       String fileCode = item['file_code'].toString();
       response = await http.get(
-        Uri.parse('$baseURL/file/rename?file_code=$fileCode&name=$newName&sess_id=${widget.sessionId}'),
+        Uri.parse('$baseURL/file/rename?file_code=$fileCode&name=$newName&sess_id=${mainFeature.sessionId}'),
       );
     } else if (item.containsKey('fld_id')) {
       String folderID = item['fld_id'].toString();
       response = await http.get(
-        Uri.parse('$baseURL/folder/rename?fld_id=$folderID&name=$newName&sess_id=${widget.sessionId}'),
+        Uri.parse('$baseURL/folder/rename?fld_id=$folderID&name=$newName&sess_id=${mainFeature.sessionId}'),
       );
     } else {
       response = {'statusCode': 404};
@@ -1205,14 +1251,14 @@ class _MyFilesPageState extends State<MyFilesPage> {
         print("copy file.");
         String fileCode = copiedFileFolder['file_code'];
         final response = await http.get(
-          Uri.parse('$baseURL/file/clone?file_code=$fileCode&sess_id=${widget.sessionId}'),
+          Uri.parse('$baseURL/file/clone?file_code=$fileCode&sess_id=${mainFeature.sessionId}'),
         );
 
         if (response.statusCode == 200) {
           var data = jsonDecode(response.body);
           String clonedFileCode = data['result']['filecode'];
           final response1 = await http.get(
-            Uri.parse('$baseURL/file/set_folder?file_code=$clonedFileCode&fld_id=$folderID&sess_id=${widget.sessionId}'),
+            Uri.parse('$baseURL/file/set_folder?file_code=$clonedFileCode&fld_id=$folderID&sess_id=${mainFeature.sessionId}'),
           );
           if (response1.statusCode == 200) {
             print('Successfully copied.');
@@ -1227,7 +1273,7 @@ class _MyFilesPageState extends State<MyFilesPage> {
         print("move file.");
         String fileCode = copiedFileFolder['file_code'];
           final response = await http.get(
-            Uri.parse('$baseURL/file/set_folder?file_code=$fileCode&fld_id=$folderID&sess_id=${widget.sessionId}'),
+            Uri.parse('$baseURL/file/set_folder?file_code=$fileCode&fld_id=$folderID&sess_id=${mainFeature.sessionId}'),
           );
           if (response.statusCode == 200) {
             print('Successfully moved.');
@@ -1238,14 +1284,14 @@ class _MyFilesPageState extends State<MyFilesPage> {
         print("copy folder.");
         String copyFolderID = copiedFileFolder['fld_id'].toString();
         final response = await http.get(
-          Uri.parse('$baseURL/folder/copy?fld_id=$copyFolderID&sess_id=${widget.sessionId}'),
+          Uri.parse('$baseURL/folder/copy?fld_id=$copyFolderID&sess_id=${mainFeature.sessionId}'),
         );
 
         if (response.statusCode == 200) {
           var data = jsonDecode(response.body);
           String clonedFolderID = data['result']['fld_id'].toString();
           final response1 = await http.get(
-            Uri.parse('$baseURL/folder/move?fld_id=$clonedFolderID&dest_fld_id=$folderID&sess_id=${widget.sessionId}'),
+            Uri.parse('$baseURL/folder/move?fld_id=$clonedFolderID&dest_fld_id=$folderID&sess_id=${mainFeature.sessionId}'),
           );
           if (response1.statusCode == 200) {
             String copiedFolderID = jsonDecode(response.body)['result']['fld_id'].toString();
@@ -1259,7 +1305,7 @@ class _MyFilesPageState extends State<MyFilesPage> {
         print("move folder.");
         String moveFolderID = copiedFileFolder['fld_id'].toString();
         final response1 = await http.get(
-          Uri.parse('$baseURL/folder/move?fld_id=$moveFolderID&dest_fld_id=$folderID&sess_id=${widget.sessionId}'),
+          Uri.parse('$baseURL/folder/move?fld_id=$moveFolderID&dest_fld_id=$folderID&sess_id=${mainFeature.sessionId}'),
         );
         if (response1.statusCode == 200) {
           print('Successfully moved.');
@@ -1283,7 +1329,7 @@ class _MyFilesPageState extends State<MyFilesPage> {
     if(item.containsKey('file_code')) {
       String fileCode = item['file_code'].toString();
       final response = await http.get(
-        Uri.parse('$baseURL/file/remove?file_code=$fileCode&remove=1&sess_id=${widget.sessionId}'),
+        Uri.parse('$baseURL/file/remove?file_code=$fileCode&remove=1&sess_id=${mainFeature.sessionId}'),
       );
       if (response.statusCode == 200) {
         print('Successfully removed.');
@@ -1293,10 +1339,10 @@ class _MyFilesPageState extends State<MyFilesPage> {
     } else {
       String folderID = item['fld_id'].toString();
       final response = await http.get(
-        Uri.parse('$baseURL/folder/delete?fld_id=$folderID&sess_id=${widget.sessionId}'),
+        Uri.parse('$baseURL/folder/delete?fld_id=$folderID&sess_id=${mainFeature.sessionId}'),
       );
       print(folderID);
-      print(widget.sessionId);
+      print(mainFeature.sessionId);
       if (response.statusCode == 200) {
         print('Successfully removed.');
       } else {
@@ -1322,7 +1368,7 @@ class _MyFilesPageState extends State<MyFilesPage> {
   // Fetch files and folders using the API
   Future<dynamic> fetchFilesAndFolders(fldId) async {
     final response = await http.get(
-      Uri.parse('$baseURL/folder/list?fld_id=${fldId.toString()}&sess_id=${widget.sessionId}'),
+      Uri.parse('$baseURL/folder/list?fld_id=${fldId.toString()}&sess_id=${mainFeature.sessionId}'),
     );
 
     if (response.statusCode == 200) {
@@ -1670,7 +1716,7 @@ class _MyFilesPageState extends State<MyFilesPage> {
   }
 
   void _startBackup() async {
-    FileUploader uploader = FileUploader(sessionId: widget.sessionId, serverUrl: uploadServer);
+    MainFeature uploader = MainFeature();
     String cameraFolderID = await uploader.getFolderID("Camera", "0");
       if (cameraFolderID == "") {
         cameraFolderID = await uploader.createCloudFolder("Camera", "0");
@@ -1715,7 +1761,7 @@ class _MyFilesPageState extends State<MyFilesPage> {
     }
     List<String> cloudFiles = [];
     final response = await http.get(
-      Uri.parse('$baseURL/folder/list?fld_id=$cameraFolderID&sess_id=${widget.sessionId}'),
+      Uri.parse('$baseURL/folder/list?fld_id=$cameraFolderID&sess_id=${mainFeature.sessionId}'),
     );
 
     if (response.statusCode == 200) {
@@ -1752,7 +1798,7 @@ class _MyFilesPageState extends State<MyFilesPage> {
 
     for (var file in mediaFiles) {
       if (!cloudFiles.contains(file.path.split('/').last.split(r'\').last)) {
-        FileUploader uploader = FileUploader(sessionId: widget.sessionId, serverUrl: uploadServer);
+        MainFeature uploader = MainFeature();
         String cameraFolderID = await uploader.getFolderID("Camera", "0");
         if (cameraFolderID == "") {
           cameraFolderID = await uploader.createCloudFolder("Camera", "0");
@@ -1787,29 +1833,7 @@ class _MyFilesPageState extends State<MyFilesPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: _getPageContent(),
-      bottomNavigationBar: BottomNavigationBar(
-        backgroundColor: Colors.white,
-        currentIndex: _selectedIndex,
-        selectedItemColor: Colors.blue,
-        onTap: _onItemTapped,
-        items: [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.folder),
-            label: 'My Files',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.sync),
-            label: 'Sync',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.upload),
-            label: 'Upload',
-          ),
-        ],
-      ),
-    );
+    return _buildFileFolderList();
   }
 
 }
@@ -1891,11 +1915,11 @@ class FileOptions extends StatelessWidget {
 }
 
 class SyncPage extends StatefulWidget {
-  final String sessionId;
-  SyncPage({required this.sessionId});
+  final MainFeature mainFeature;
+  SyncPage({required this.mainFeature});
 
   @override
-  _SyncPageState createState() => _SyncPageState(sessionId: sessionId);
+  _SyncPageState createState() => _SyncPageState(mainFeature: mainFeature);
 }
 
 class SyncOrder {
@@ -1941,12 +1965,12 @@ class _SyncPageState extends State<SyncPage> {
   List<List<String>> syncedFiles = [];
   String uploadServer = "";
   dynamic syncedFileFolders = {};
-  final String sessionId;
+  final MainFeature mainFeature;
   bool isLoading = false;
   Isolate? _backgroundIsolate;
   bool isSyncing = false;
 
-  _SyncPageState({required this.sessionId});
+  _SyncPageState({required this.mainFeature});
 
   @override
   void initState() {
@@ -2019,7 +2043,7 @@ class _SyncPageState extends State<SyncPage> {
   Future<void> _initializeServerUrl() async {
     try {
       final response = await http.get(
-        Uri.parse('$baseURL/upload/server?sess_id=$sessionId'),
+        Uri.parse('$baseURL/upload/server?sess_id=${mainFeature.sessionId}'),
       );
 
       if (response.statusCode == 200) {
@@ -2254,7 +2278,7 @@ class _SyncPageState extends State<SyncPage> {
     }
     
     final response = await http.get(
-      Uri.parse('$baseURL/folder/list?fld_id=$folderID&sess_id=${widget.sessionId}'),
+      Uri.parse('$baseURL/folder/list?fld_id=$folderID&sess_id=${mainFeature.sessionId}'),
     );
 
     if (response.statusCode == 200) {
@@ -2270,7 +2294,7 @@ class _SyncPageState extends State<SyncPage> {
         String filePath = "$localPath${Platform.pathSeparator}$file";
         File uploadFile = File(filePath);
         if (uploadFile.existsSync()) {
-          FileUploader uploader = FileUploader(sessionId: widget.sessionId, serverUrl: uploadServer);
+          MainFeature uploader = MainFeature();
           await uploader.uploadFile(filePath, folderID);
         }
       }
@@ -2306,7 +2330,7 @@ class _SyncPageState extends State<SyncPage> {
     }
     
     final response = await http.get(
-      Uri.parse('$baseURL/folder/list?fld_id=$folderID&sess_id=${widget.sessionId}'),
+      Uri.parse('$baseURL/folder/list?fld_id=$folderID&sess_id=${mainFeature.sessionId}'),
     );
 
     if (response.statusCode == 200) {
@@ -2358,7 +2382,7 @@ class _SyncPageState extends State<SyncPage> {
     }
     
     final response = await http.get(
-      Uri.parse('$baseURL/folder/list?fld_id=$folderID&sess_id=${widget.sessionId}'),
+      Uri.parse('$baseURL/folder/list?fld_id=$folderID&sess_id=${mainFeature.sessionId}'),
     );
 
     if (response.statusCode == 200) {
@@ -2374,7 +2398,7 @@ class _SyncPageState extends State<SyncPage> {
         String filePath = "$localPath${Platform.pathSeparator}$file";
         File uploadFile = File(filePath);
         if (uploadFile.existsSync()) {
-          FileUploader uploader = FileUploader(sessionId: widget.sessionId, serverUrl: uploadServer);
+          MainFeature uploader = MainFeature();
           await uploader.uploadFile(filePath, folderID);
         }
       }
@@ -2383,7 +2407,7 @@ class _SyncPageState extends State<SyncPage> {
     for (int i = 0; i < cloudFiles.length; i++) {
       String file = cloudFiles[i];
       if (!localFiles.contains(file)) {
-        await http.get(Uri.parse('$baseURL/file/remove?file_code=${cloudFileCodes[i]}&remove=1&sess_id=${widget.sessionId}'));
+        await http.get(Uri.parse('$baseURL/file/remove?file_code=${cloudFileCodes[i]}&remove=1&sess_id=${mainFeature.sessionId}'));
         print("Deleted from cloud: $file");
       }
     }
@@ -2442,7 +2466,7 @@ class _SyncPageState extends State<SyncPage> {
     }
 
     final response = await http.get(
-      Uri.parse('$baseURL/folder/list?fld_id=$folderID&sess_id=${widget.sessionId}'),
+      Uri.parse('$baseURL/folder/list?fld_id=$folderID&sess_id=${mainFeature.sessionId}'),
     );
 
     if (response.statusCode == 200) {
@@ -2471,7 +2495,7 @@ class _SyncPageState extends State<SyncPage> {
         String filePath = "$localPath${Platform.pathSeparator}$file";
         File uploadFile = File(filePath);
         if (uploadFile.existsSync()) {
-          FileUploader uploader = FileUploader(sessionId: widget.sessionId, serverUrl: uploadServer);
+          MainFeature uploader = MainFeature();
           await uploader.uploadFile(filePath, folderID);
         }
       }
@@ -2481,7 +2505,7 @@ class _SyncPageState extends State<SyncPage> {
       String file = syncFiles[i];
       if(!localFiles.contains(file)) {
         String fileToDeleteCode = syncFileCodes[i];
-        await http.get(Uri.parse('$baseURL/file/remove?file_code=$fileToDeleteCode&remove=1&sess_id=${widget.sessionId}'));
+        await http.get(Uri.parse('$baseURL/file/remove?file_code=$fileToDeleteCode&remove=1&sess_id=${mainFeature.sessionId}'));
         print("Deleted from cloud: $file");
       }
       if(!cloudFiles.contains(file)) {
@@ -2533,7 +2557,7 @@ class _SyncPageState extends State<SyncPage> {
     dynamic scanedData = {};
     // Update synced files.
     final response = await http.get(
-      Uri.parse('$baseURL/folder/list?fld_id=$fldID&sess_id=${widget.sessionId}'),
+      Uri.parse('$baseURL/folder/list?fld_id=$fldID&sess_id=${mainFeature.sessionId}'),
     );
 
     if (response.statusCode == 200) {
@@ -2594,7 +2618,7 @@ class _SyncPageState extends State<SyncPage> {
 
   Future<void> _deleteCloudFolder(String folderID) async {
     final response = await http.get(
-      Uri.parse('$baseURL/folder/delete?fld_id=$folderID&sess_id=${widget.sessionId}'),
+      Uri.parse('$baseURL/folder/delete?fld_id=$folderID&sess_id=${mainFeature.sessionId}'),
     );
     if (response.statusCode == 200) {
       print("Successfully delete cloud folder $folderID.");
@@ -2603,7 +2627,7 @@ class _SyncPageState extends State<SyncPage> {
 
   Future<String> _getDownloadLink(String fileCode) async {
     final response = await http.get(
-      Uri.parse('$baseURL/file/direct_link?file_code=$fileCode&sess_id=${widget.sessionId}'),
+      Uri.parse('$baseURL/file/direct_link?file_code=$fileCode&sess_id=${mainFeature.sessionId}'),
     );
     if (response.statusCode == 200) {
       var data = jsonDecode(response.body);
@@ -2614,7 +2638,7 @@ class _SyncPageState extends State<SyncPage> {
 
   Future<String> getFolderID(String folderName, String parentFolderID) async {
     final response = await http.get(
-      Uri.parse('$baseURL/folder/list?fld_id=$parentFolderID&sess_id=${widget.sessionId}'),
+      Uri.parse('$baseURL/folder/list?fld_id=$parentFolderID&sess_id=${mainFeature.sessionId}'),
     );
     if (response.statusCode == 200) {
       var data = jsonDecode(response.body);
@@ -2627,7 +2651,7 @@ class _SyncPageState extends State<SyncPage> {
       }
     }
     final response1 = await http.get(
-      Uri.parse('$baseURL/folder/create?parent_id=$parentFolderID&name=$folderName&sess_id=${widget.sessionId}'),
+      Uri.parse('$baseURL/folder/create?parent_id=$parentFolderID&name=$folderName&sess_id=${mainFeature.sessionId}'),
     );
     if (response1.statusCode == 200) {
       var data = jsonDecode(response1.body);
@@ -2639,7 +2663,7 @@ class _SyncPageState extends State<SyncPage> {
   Future<String> createCloudFolder(String localFolder, String parentId) async {
     print(localFolder);
     final response = await http.get(
-      Uri.parse('$baseURL/folder/create?parent_id=$parentId&name=$localFolder&sess_id=${widget.sessionId}')
+      Uri.parse('$baseURL/folder/create?parent_id=$parentId&name=$localFolder&sess_id=${mainFeature.sessionId}')
     );
     if (response.statusCode == 200) {
       var data = jsonDecode(response.body);
@@ -2765,22 +2789,22 @@ class _SyncPageState extends State<SyncPage> {
 }
 
 class UploadPage extends StatefulWidget {
-  final String sessionId;
-  UploadPage({required this.sessionId});
+  final MainFeature mainFeature;
+  UploadPage({required this.mainFeature});
 
   @override
-  _UploadPageState createState() => _UploadPageState(sessionId: sessionId);
+  _UploadPageState createState() => _UploadPageState(mainFeature: mainFeature);
 }
 
 class _UploadPageState extends State<UploadPage> {
   String uploadServer = "";
-  final String sessionId;
+  final MainFeature mainFeature;
   bool isLoading = false;
   List<String> selectedFiles = [];
   double uploadProgress = 0.0; // Track upload progress
   int uploadedItemCounts = 0;
 
-  _UploadPageState({required this.sessionId});
+  _UploadPageState({required this.mainFeature});
 
   @override
   void initState() {
@@ -2792,7 +2816,7 @@ class _UploadPageState extends State<UploadPage> {
   Future<void> _initializeServerUrl() async {
     try {
       final response = await http.get(
-        Uri.parse('$baseURL/upload/server?sess_id=$sessionId'),
+        Uri.parse('$baseURL/upload/server?sess_id=${mainFeature.sessionId}'),
       );
 
       if (response.statusCode == 200) {
@@ -2813,7 +2837,7 @@ class _UploadPageState extends State<UploadPage> {
       isLoading = true;
       uploadProgress = 0.0;
     });
-    FileUploader uploader = FileUploader(sessionId: widget.sessionId, serverUrl: uploadServer);
+    MainFeature uploader = MainFeature();
     for (int i = 0; i< selectedFiles.length; i ++) {
       String filePath = selectedFiles[i];
       print("File $filePath is uploading now...");
@@ -2843,7 +2867,7 @@ class _UploadPageState extends State<UploadPage> {
   
   Future<String> getFolderID(String folderName, String parentFolderID) async {
     final response = await http.get(
-      Uri.parse('$baseURL/folder/list?fld_id=$parentFolderID&sess_id=${widget.sessionId}'),
+      Uri.parse('$baseURL/folder/list?fld_id=$parentFolderID&sess_id=${mainFeature.sessionId}'),
     );
     if (response.statusCode == 200) {
       var data = jsonDecode(response.body);
@@ -2882,12 +2906,12 @@ class _UploadPageState extends State<UploadPage> {
   }
 
   Future<void> moveFile(String fileCode, String folderID) async {
-    await http.get(Uri.parse('$baseURL/file/set_folder?file_code=$fileCode&fld_id=$folderID&sess_id=${widget.sessionId}'));
+    await http.get(Uri.parse('$baseURL/file/set_folder?file_code=$fileCode&fld_id=$folderID&sess_id=${mainFeature.sessionId}'));
   }
 
   Future<String> createCloudFolder(String localFolder, String parentId) async {
     final response = await http.get(
-      Uri.parse('$baseURL/folder/create?parent_id=$parentId&name=$localFolder&sess_id=${widget.sessionId}')
+      Uri.parse('$baseURL/folder/create?parent_id=$parentId&name=$localFolder&sess_id=${mainFeature.sessionId}')
     );
     if (response.statusCode == 200) {
       var data = jsonDecode(response.body);
@@ -3003,14 +3027,73 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   }
 }
 
-class FileUploader {
-  final String? serverUrl; // Stores the available server URL
-  final String sessionId;
+class MainFeature {
+  String sessionId = "";
+  List<dynamic> uploadQueue = [];
+  List<dynamic> downloadQueue = [];
+  String serverUrl = "";
+  bool isFirstCall = true;
+  int currentUploadingItemIndex = 0;
+  int currentDownloadingItemIndex = 0;
 
-  FileUploader({required this.sessionId, required this.serverUrl});
-  /// Fetch available upload server URL at startup
+  Future<void> initState() async {
+    if (isFirstCall) {
+      await getSessionId();
+      await _initializeServerUrl();
+      _infinitCycling();
+    }
+    isFirstCall = false;
+  }
 
-  /// Upload file to server
+  Future<void> getSessionId() async {
+    final prefs = await SharedPreferences.getInstance();
+    sessionId = prefs.getString('sessionId')!;
+  }
+
+  void addUploadQueue(List<dynamic> uploadingItems) {
+    uploadQueue.addAll(uploadingItems);
+  }
+
+  void adddownloadingQueue(List<dynamic> downloadingItems){
+    downloadQueue.addAll(downloadingItems);
+  }
+
+  Future<void> _infinitCycling() async {
+    for(int i = 0; i < 10; i ++) {
+      if (uploadQueue.isNotEmpty && uploadQueue.length > currentUploadingItemIndex) {
+        String fileCode = await uploadFile(uploadQueue[currentUploadingItemIndex]['filePath'], uploadQueue[currentUploadingItemIndex]['folderID']);
+        uploadQueue[currentUploadingItemIndex]['fileCode'] = fileCode;
+        currentUploadingItemIndex ++;
+      }
+      if (downloadQueue.isNotEmpty && downloadQueue.length > currentDownloadingItemIndex) {
+        await downloadFile(downloadQueue[currentDownloadingItemIndex]['fileCode'], 
+                          downloadQueue[currentDownloadingItemIndex]['fileName'],
+                          downloadQueue[currentDownloadingItemIndex]['filePath']);
+        currentDownloadingItemIndex ++;
+      }
+    }
+    await Future.delayed(Duration(seconds: 10));
+    await _infinitCycling();
+  }
+
+  Future<void> _initializeServerUrl() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseURL/upload/server?sess_id=$sessionId'),
+      );
+
+      if (response.statusCode == 200) {
+        var data = jsonDecode(response.body);
+        serverUrl = data['result'];
+        print("Upload server initialized: $serverUrl");
+      } else {
+        print("Failed to get upload server: ${response.reasonPhrase}");
+      }
+    } catch (e) {
+      print("Error fetching upload server: $e");
+    }
+  }
+
   Future<String> uploadFile(String filePath, String folderID) async {
     print('trying to upload: $filePath');
     if (serverUrl == null) {
@@ -3094,6 +3177,127 @@ class FileUploader {
       return data['result']['fld_id'].toString();
     }
     return "";
+  }
+
+  Future<String> getDownloadDirectory() async {
+    String subpath = "";
+    subpath = subpath.replaceAll(RegExp(r'/{2,}'), '/');
+    if (subpath.endsWith('/')) {
+      subpath = subpath.substring(0, subpath.length - 1);
+    }
+    if (Platform.isAndroid) {
+      String path = '/storage/emulated/0/Download/FileLuSync/$subpath';
+      return path;
+    } else if (Platform.isIOS) {
+      Directory dir = await getApplicationDocumentsDirectory();
+      return "${dir.path}/$subpath"; // Add subpath here
+    } else if (Platform.isWindows) {
+      String? userHome = Platform.environment['USERPROFILE'];
+      return "$userHome\\Documents\\MySyncFolder\\$subpath";
+    } else if (Platform.isMacOS) {
+      Directory dir = await getDownloadsDirectory() ?? await getApplicationDocumentsDirectory();
+      return "${dir.path}/$subpath"; // Add subpath here if needed
+    } else if (Platform.isLinux) {
+      String? home = Platform.environment['HOME'];
+      return "$home/Downloads/$subpath"; // Add subpath here if needed
+    } else {
+      throw Exception("Unsupported platform");
+    }
+  }
+
+  Future<String> _getDownloadLink(fileCode) async {
+    final response = await http.get(
+      Uri.parse('$baseURL/file/direct_link?file_code=$fileCode&sess_id=$sessionId')
+    );
+
+    if (response.statusCode == 200) {
+      var data = jsonDecode(response.body);
+      Uri.parse(data['result']['url']);
+      return data['result']['url'];
+    } else {
+      return "cannot get download link";
+    }
+  }
+
+  Future<void> downloadFile(String fileCode, String fileName, String filePath) async {
+    String parentDirectory = await getDownloadDirectory();
+    String saveDirectory = "$parentDirectory/$filePath";
+    print("saveDirectory: $saveDirectory");
+    
+    try {
+      String downloadLink = await _getDownloadLink(fileCode);
+      if (Platform.isAndroid) {
+        var status = await Permission.storage.request();
+        if (!status.isGranted) {
+          print("Storage permission denied");
+          return;
+        }
+      }
+      final response = await http.get(Uri.parse(downloadLink));
+      if (response.statusCode == 200) {
+        String filePath = '$saveDirectory/$fileName';
+        File file = File(filePath);
+        if (!await file.parent.exists()) {
+          await file.parent.create(recursive: true);
+        }
+        await file.writeAsBytes(response.bodyBytes);
+        print("Download complete! File saved at: $filePath");
+      } else {
+        print("Download failed. Server response: ${response.statusCode}");
+      }
+    } catch (e) {
+      print("Error downloading file: $e");
+    }
+  }
+
+  Future<void> downloadFolder(int folderID, String folderName, String subpath) async {
+    String saveDirectory= "$subpath/$folderName";
+    await createFolderIfNotExists(saveDirectory);
+    dynamic fileFolders = await fetchFilesAndFolders(folderID);
+    if (fileFolders.containsKey('folders')) {
+      dynamic folders = fileFolders['folders'];
+      for (dynamic folder in folders) {
+        await downloadFolder(folder['fld_id'], folder['name'], saveDirectory);
+      }
+    }
+    if (fileFolders.containsKey('files')) {
+      dynamic files = fileFolders['files'];
+      for (dynamic file in files) {
+        adddownloadingQueue([{
+          "fileCode": file['file_code'], 
+          "fileName": file['name'], 
+          "filePath": saveDirectory
+        }]);
+      }
+    }
+  }
+  
+  Future<void> createFolderIfNotExists(String path) async {
+    String parentDirectory = await getDownloadDirectory();
+    final directory = Directory("$parentDirectory/$path");
+
+    // Check if the directory exists
+    if (await directory.exists()) {
+      print('Directory already exists: $path');
+    } else {
+      // Create the directory
+      await directory.create(recursive: true);
+      print('Directory created: $path');
+    }
+  }
+
+  Future<dynamic> fetchFilesAndFolders(fldId) async {
+    final response = await http.get(
+      Uri.parse('$baseURL/folder/list?fld_id=${fldId.toString()}&sess_id=$sessionId'),
+    );
+
+    if (response.statusCode == 200) {
+      var data = jsonDecode(response.body);
+      return data['result'];
+    } else {
+      print('Failed to load folders and files');
+      return [];
+    }
   }
 
 }
