@@ -1190,9 +1190,16 @@ class _MyFilesPageState extends State<MyFilesPage> {
           ),
           actions: [
             TextButton(
-              onPressed: () {
+              onPressed: () async {
                 Navigator.pop(context);
-                _renameFile(item, controller.text);
+                setState(() {
+                  isLoading = true;
+                });
+                await mainFeature._renameFile(item, controller.text);
+                await _fetchFilesAndFolders(visitedFolderIDs.last.first);
+                setState(() {
+                  isLoading = false; // Start loading
+                });
               },
               child: Text('Rename', style: TextStyle(color: Colors.blue),),
             ),
@@ -1200,36 +1207,6 @@ class _MyFilesPageState extends State<MyFilesPage> {
         );
       },
     );
-  }
-
-  void _renameFile(dynamic item, String newName) async {
-    setState(() {
-      isLoading = true; // Start loading
-    });
-    final response;
-    if (item.containsKey('file_code')) {
-      String fileCode = item['file_code'].toString();
-      response = await http.get(
-        Uri.parse('$baseURL/file/rename?file_code=$fileCode&name=$newName&sess_id=${mainFeature.sessionId}'),
-      );
-    } else if (item.containsKey('fld_id')) {
-      String folderID = item['fld_id'].toString();
-      response = await http.get(
-        Uri.parse('$baseURL/folder/rename?fld_id=$folderID&name=$newName&sess_id=${mainFeature.sessionId}'),
-      );
-    } else {
-      response = {'statusCode': 404};
-    }
-    
-    if (response.statusCode == 200) {
-      await _fetchFilesAndFolders(visitedFolderIDs.last.first);
-      print('Successfully rename ${item['name']} to $newName.');
-    } else {
-      print('Rename ${item.name} failed');
-    }
-    setState(() {
-      isLoading = false; // Start loading
-    });
   }
 
   void _copyFile(dynamic item, int copyOrMove) {
@@ -1299,7 +1276,7 @@ class _MyFilesPageState extends State<MyFilesPage> {
           );
           if (response1.statusCode == 200) {
             String copiedFolderID = jsonDecode(response.body)['result']['fld_id'].toString();
-            _renameFile(jsonDecode(response.body)['result'], copiedFileFolder['name']);
+            mainFeature._renameFile(jsonDecode(response.body)['result'], copiedFileFolder['name']);
             print('Successfully copied.');
           } else {
             print("Failed to paste folder, it's cloned to the root directory.");
@@ -3295,6 +3272,29 @@ class MainFeature {
       } else {
         print("Failed to remove.");
       }
+    }
+  }
+
+  Future<void> _renameFile(dynamic item, String newName) async {
+    final response;
+    if (item.containsKey('file_code')) {
+      String fileCode = item['file_code'].toString();
+      response = await http.get(
+        Uri.parse('$baseURL/file/rename?file_code=$fileCode&name=$newName&sess_id=$sessionId'),
+      );
+    } else if (item.containsKey('fld_id')) {
+      String folderID = item['fld_id'].toString();
+      response = await http.get(
+        Uri.parse('$baseURL/folder/rename?fld_id=$folderID&name=$newName&sess_id=$sessionId'),
+      );
+    } else {
+      response = {'statusCode': 404};
+    }
+    
+    if (response.statusCode == 200) {
+      print('Successfully rename ${item['name']} to $newName.');
+    } else {
+      print('Rename ${item.name} failed');
     }
   }
 
