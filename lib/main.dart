@@ -934,10 +934,10 @@ class _MyFilesPageState extends State<MyFilesPage> {
               isLoading = true;
             });
             if (item != "") {
-              await mainFeature._removeFile(item);
+              await mainFeature.removeFile(item);
             } else {
               for (dynamic selectedItem in selectedItems) {
-                await mainFeature._removeFile(selectedItem);
+                await mainFeature.removeFile(selectedItem);
               }
             }
             setState(() {
@@ -1671,10 +1671,9 @@ class _MyFilesPageState extends State<MyFilesPage> {
   }
 
   void _startBackup() async {
-    MainFeature uploader = MainFeature();
-    String cameraFolderID = await uploader.getFolderID("Camera", "0");
+    String cameraFolderID = await mainFeature.getFolderID("Camera", "0");
       if (cameraFolderID == "") {
-        cameraFolderID = await uploader.createCloudFolder("Camera", "0");
+        cameraFolderID = await mainFeature.createCloudFolder("Camera", "0");
       }
     _uploadCameraFolder(cameraFolderID);
     if (_backgroundIsolate != null) return;
@@ -1683,10 +1682,12 @@ class _MyFilesPageState extends State<MyFilesPage> {
     newReceivePort.listen((message) async {
       String detectedFilePath = message as String;
       print("📂 New file detected in main isolate: $detectedFilePath");
-      await Future.delayed(Duration(seconds: 3));
-      await uploader.uploadFile(detectedFilePath, cameraFolderID);
+      // await Future.delayed(Duration(seconds: 3));
+      mainFeature.addUploadQueue([{
+        "filePath": detectedFilePath,
+        "folderID": cameraFolderID,
+      }]);
     });
-
     print("✅ Background Sync Started!");
   }
 
@@ -1918,7 +1919,6 @@ class SyncOrder {
 class _SyncPageState extends State<SyncPage> {
   List<SyncOrder> syncOrders = [];
   List<List<String>> syncedFiles = [];
-  String uploadServer = "";
   dynamic syncedFileFolders = {};
   final MainFeature mainFeature;
   bool isLoading = false;
@@ -1931,7 +1931,6 @@ class _SyncPageState extends State<SyncPage> {
   void initState() {
     super.initState();
     _loadSyncOrders(); 
-    _initializeServerUrl();
     _runPerformSync();
     _watchFileCDM();
   }
@@ -1995,24 +1994,6 @@ class _SyncPageState extends State<SyncPage> {
     _runPerformSync();
   }
 
-  Future<void> _initializeServerUrl() async {
-    try {
-      final response = await http.get(
-        Uri.parse('$baseURL/upload/server?sess_id=${mainFeature.sessionId}'),
-      );
-
-      if (response.statusCode == 200) {
-        var data = jsonDecode(response.body);
-        uploadServer = data['result'];
-        print("Upload server initialized: $uploadServer");
-      } else {
-        print("Failed to get upload server: ${response.reasonPhrase}");
-      }
-    } catch (e) {
-      print("Error fetching upload server: $e");
-    }
-  }
-
   /// Load sync orders from local storage
   Future<void> _loadSyncOrders() async {
     final prefs = await SharedPreferences.getInstance();
@@ -2021,7 +2002,7 @@ class _SyncPageState extends State<SyncPage> {
     final dynamic? storedSyncedFileFolders = prefs.getString('scanned_data');
 
     if (storedOrders != null && storedOrders != "" && storedOrders != {}) {
-      setState(() {
+    setState(() {
         List<dynamic> decoded = jsonDecode(storedOrders);
         syncOrders = decoded.map((e) => SyncOrder.fromJson(e)).toList();
       });
@@ -2037,7 +2018,7 @@ class _SyncPageState extends State<SyncPage> {
     if (storedSyncedFileFolders != null && storedSyncedFileFolders != "" && storedSyncedFileFolders != {}) {
       setState(() {
         syncedFileFolders = jsonDecode(storedSyncedFileFolders);
-      });
+    });
     }
   }
 
@@ -3016,7 +2997,9 @@ class MainFeature {
   Future<void> _infinitCycling() async {
     for(int i = 0; i < 10; i ++) {
       if (uploadQueue.isNotEmpty && uploadQueue.length > currentUploadingItemIndex) {
-        String fileCode = await uploadFile(uploadQueue[currentUploadingItemIndex]['filePath'], uploadQueue[currentUploadingItemIndex]['folderID']);
+        String fileCode = await uploadFile(
+          uploadQueue[currentUploadingItemIndex]['filePath'], 
+          uploadQueue[currentUploadingItemIndex]['folderID']);
         uploadQueue[currentUploadingItemIndex]['fileCode'] = fileCode;
         currentUploadingItemIndex ++;
       }
@@ -3255,7 +3238,7 @@ class MainFeature {
     }
   }
 
-  Future<void> _removeFile(dynamic item) async {
+  Future<void> removeFile(dynamic item) async {
     print(item);
     if(item.containsKey('file_code')) {
       String fileCode = item['file_code'].toString();
@@ -3346,9 +3329,9 @@ void _filefolderWatcher(SendPort sendPort) async {
             } else if (event.type == FileSystemEvent.delete) {
               print("🗑️ File/Folder Deleted: ${event.path}");
               sendPort.send({'event': 'delete', 'path': event.path});
-            } else if (event.type == FileSystemEvent.modify) {
-              print("✏️ File/Folder Modified: ${event.path}");
-              sendPort.send({'event': 'modify', 'path': event.path});
+            // } else if (event.type == FileSystemEvent.modify) {
+            //   print("✏️ File/Folder Modified: ${event.path}");
+            //   sendPort.send({'event': 'modify', 'path': event.path});
             } else if (event.type == FileSystemEvent.move) {
               print("🔄 File/Folder Moved: ${event.path}");
               sendPort.send({'event': 'move', 'path': event.path});
@@ -3371,9 +3354,9 @@ void _filefolderWatcher(SendPort sendPort) async {
     } else if (event.type == FileSystemEvent.delete) {
       print("🗑️ File/Folder Deleted: ${event.path}");
       sendPort.send({'event': 'delete', 'path': event.path});
-    } else if (event.type == FileSystemEvent.modify) {
-      print("✏️ File/Folder Modified: ${event.path}");
-      sendPort.send({'event': 'modify', 'path': event.path});
+    // } else if (event.type == FileSystemEvent.modify) {
+    //   print("✏️ File/Folder Modified: ${event.path}");
+    //   sendPort.send({'event': 'modify', 'path': event.path});
     } else if (event.type == FileSystemEvent.move) {
       print("🔄 File/Folder Moved: ${event.path}");
       sendPort.send({'event': 'move', 'path': event.path});

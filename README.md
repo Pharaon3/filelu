@@ -1,5 +1,11 @@
 # filelusync
 
+## About
+
+Upload and back up all your files, music, videos, photos, and docs. You can get up to 1 TB of free space with a referral program.
+
+FileLu is an online cloud storage provider. We offer online file storage, and remote backup capacity with easy-to-use uploading and downloading tools. Our mission is to provide the best and simplest online storage and file-sharing service. Users can upload, store, and securely share their files with family, friends, team, or anyone worldwide.
+
 A new Flutter project.
 
 ## Getting Started
