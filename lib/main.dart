@@ -12,6 +12,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:intl/intl.dart';
 import 'dart:isolate';
+import 'dart:async';
 
 const String baseURL = "https://filelu.com/api";
 
@@ -387,7 +388,7 @@ class _MainPageState extends State<MainPage> {
       case 1:
         return SyncPage(mainFeature: mainFeature,);
       case 2:
-        return UploadPage(mainFeature: mainFeature,);
+        return Transfer(mainFeature: mainFeature,);
       case 3:
         return UploadPage(mainFeature: mainFeature,);
       default:
@@ -415,7 +416,7 @@ class _MainPageState extends State<MainPage> {
             label: 'Sync',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.upload),
+            icon: Icon(Icons.sync_alt),
             label: 'Transfer',
           ),
           BottomNavigationBarItem(
@@ -471,8 +472,6 @@ class _MyFilesPageState extends State<MyFilesPage> {
       isLoading = true; // Start loading
     });
     await mainFeature.initState();
-    print('fetch file folder of which folder id is $fldId.');
-    print('sessionId is ${mainFeature.sessionId}.');
     final response = await http.get(
       Uri.parse('$baseURL/folder/list?fld_id=${fldId.toString()}&sess_id=${mainFeature.sessionId}'),
     );
@@ -875,7 +874,6 @@ class _MyFilesPageState extends State<MyFilesPage> {
           onRename: () {
             Navigator.pop(context);
             _showRenameDialog(context, item);
-            print('Rename ${item['name']}');
           },
           onCopy: () {
             Navigator.pop(context);
@@ -897,24 +895,24 @@ class _MyFilesPageState extends State<MyFilesPage> {
               .join('/');
             if (item != "") {
               if (item.containsKey('file_code')) {
-                mainFeature.adddownloadingQueue([{
+                mainFeature.addDownloadingQueue({
                   "fileCode": item['file_code'], 
                   "fileName": item['name'], 
                   "filePath": subpath
-                }]);
+                });
               } else {
-                await mainFeature.downloadFolder(item['fld_id'], item['name'], subpath);
+                await mainFeature.downloadFolder(item['fld_id'], "$subpath/${item['name']}");
               }
             } else {
               for (dynamic selectedItem in selectedItems) {
                 if (selectedItem.containsKey('file_code')) {
-                  mainFeature.adddownloadingQueue([{
+                  mainFeature.addDownloadingQueue({
                     "fileCode": selectedItem['file_code'], 
                     "fileName": selectedItem['name'], 
                     "filePath": subpath
-                  }]);
+                  });
                 } else {
-                  await mainFeature.downloadFolder(selectedItem['fld_id'], selectedItem['name'], subpath);
+                  await mainFeature.downloadFolder(selectedItem['fld_id'], "$subpath/${selectedItem['name']}");
                 }
               }
             }
@@ -934,10 +932,10 @@ class _MyFilesPageState extends State<MyFilesPage> {
               isLoading = true;
             });
             if (item != "") {
-              await mainFeature.removeFile(item);
+              await mainFeature.removeCloudItem(item);
             } else {
               for (dynamic selectedItem in selectedItems) {
-                await mainFeature.removeFile(selectedItem);
+                await mainFeature.removeCloudItem(selectedItem);
               }
             }
             setState(() {
@@ -1119,63 +1117,6 @@ class _MyFilesPageState extends State<MyFilesPage> {
     }
   }
 
-  Future<void> downloadFile(String fileCode, String fileName, String filePath) async {
-    String saveDirectory = filePath;
-    print("filePath: $filePath");
-    
-    // Get the download directory if no path is provided
-    if (filePath == "") saveDirectory = await getDownloadDirectory();
-    print("saveDirectory: $saveDirectory");
-    
-    try {
-      String downloadLink = await _getDownloadLink(fileCode);
-      if (Platform.isAndroid) {
-        var status = await Permission.storage.request();
-        if (!status.isGranted) {
-          print("Storage permission denied");
-          return;
-        }
-      }
-      final response = await http.get(Uri.parse(downloadLink));
-      if (response.statusCode == 200) {
-        String filePath = '$saveDirectory/$fileName';
-        File file = File(filePath);
-        if (!await file.parent.exists()) {
-          await file.parent.create(recursive: true);
-        }
-        await file.writeAsBytes(response.bodyBytes);
-        print("Download complete! File saved at: $filePath");
-      } else {
-        print("Download failed. Server response: ${response.statusCode}");
-      }
-    } catch (e) {
-      print("Error downloading file: $e");
-    }
-  }
-
-  Future<void> downloadFolder(int folderID, String folderName, [String subpath = ""]) async {
-    String saveDirectory;
-    if (subpath == "") {
-      saveDirectory = "${await getDownloadDirectory()}/$folderName";
-    } else {
-      saveDirectory = "$subpath/$folderName";
-    }
-    await createFolderIfNotExists(saveDirectory);
-    dynamic fileFolders = await fetchFilesAndFolders(folderID);
-    if (fileFolders.containsKey('folders')) {
-      dynamic folders = fileFolders['folders'];
-      for (dynamic folder in folders) {
-        await downloadFolder(folder['fld_id'], folder['name'], saveDirectory);
-      }
-    }
-    if (fileFolders.containsKey('files')) {
-      dynamic files = fileFolders['files'];
-      for (dynamic file in files) {
-        await downloadFile(file['file_code'], file['name'], saveDirectory);
-      }
-    }
-  }
-
   void _showRenameDialog(BuildContext context, dynamic item) {
     TextEditingController controller = TextEditingController(text: item['name']);
     showDialog(
@@ -1230,11 +1171,9 @@ class _MyFilesPageState extends State<MyFilesPage> {
     setState(() {
       isLoading = true; // Start loading
     });
-    print("paste file.");
     String folderID = visitedFolderIDs.last.first.toString();
     for(dynamic copiedFileFolder in copiedFileFolders){
       if (copyStatus == 1 && copiedFileFolder.containsKey('file_code')) {  // copy file.
-        print("copy file.");
         String fileCode = copiedFileFolder['file_code'];
         final response = await http.get(
           Uri.parse('$baseURL/file/clone?file_code=$fileCode&sess_id=${mainFeature.sessionId}'),
@@ -1256,7 +1195,6 @@ class _MyFilesPageState extends State<MyFilesPage> {
           return;
         }
       } else if (copyStatus == 2 && copiedFileFolder.containsKey('file_code')) { // move file.
-        print("move file.");
         String fileCode = copiedFileFolder['file_code'];
           final response = await http.get(
             Uri.parse('$baseURL/file/set_folder?file_code=$fileCode&fld_id=$folderID&sess_id=${mainFeature.sessionId}'),
@@ -1267,7 +1205,6 @@ class _MyFilesPageState extends State<MyFilesPage> {
             print("Failed to paste file.");
           }
       } else if (copyStatus == 1 && !copiedFileFolder.containsKey('file_code')) { // copy folder.
-        print("copy folder.");
         String copyFolderID = copiedFileFolder['fld_id'].toString();
         final response = await http.get(
           Uri.parse('$baseURL/folder/copy?fld_id=$copyFolderID&sess_id=${mainFeature.sessionId}'),
@@ -1288,7 +1225,6 @@ class _MyFilesPageState extends State<MyFilesPage> {
           }
         }
       } else if (copyStatus == 2 && !copiedFileFolder.containsKey('file_code')) { // move folder.
-        print("move folder.");
         String moveFolderID = copiedFileFolder['fld_id'].toString();
         final response1 = await http.get(
           Uri.parse('$baseURL/folder/move?fld_id=$moveFolderID&dest_fld_id=$folderID&sess_id=${mainFeature.sessionId}'),
@@ -1312,11 +1248,9 @@ class _MyFilesPageState extends State<MyFilesPage> {
 
     // Check if the directory exists
     if (await directory.exists()) {
-      print('Directory already exists: $path');
     } else {
       // Create the directory
       await directory.create(recursive: true);
-      print('Directory created: $path');
     }
   }
 
@@ -1426,8 +1360,9 @@ class _MyFilesPageState extends State<MyFilesPage> {
               onPressed: () {
                 setState(() {
                   fromToday = true;
+                  mainFeature.fromToday = true;
                 });
-                _startBackup();
+                mainFeature._startBackup();
                 Navigator.pop(context);
               },
               child: Text("Today Only", style: TextStyle(color: Colors.blue)),
@@ -1436,8 +1371,9 @@ class _MyFilesPageState extends State<MyFilesPage> {
               onPressed: () {
                 setState(() {
                   fromToday = false;
+                  mainFeature.fromToday = false;
                 });
-                _startBackup();
+                mainFeature._startBackup();
                 Navigator.pop(context);
               },
               child: Text("From Beginning", style: TextStyle(color: Colors.blue)),
@@ -1485,7 +1421,6 @@ class _MyFilesPageState extends State<MyFilesPage> {
                     numberOfImages = enteredNumberOfImages;
                     currentPage = 0;
                   });
-                  print("Number of images per page: $enteredNumberOfImages");
                 } else {
                   // Handle invalid input
                   print("Invalid input. Please enter a valid number.");
@@ -1513,7 +1448,7 @@ class _MyFilesPageState extends State<MyFilesPage> {
       _autoCameraBackup = prefs.getBool('autoCameraBackup') ?? false;
     });
     if (prefs.getBool('autoCameraBackup') == true) {
-      _startBackup();
+      // mainFeature._startBackup();
     }
     if (prefs.getString('last_backup_date') != "") {
       print("last_backup_date: ${prefs.getString('last_backup_date')}");
@@ -1681,12 +1616,11 @@ class _MyFilesPageState extends State<MyFilesPage> {
     _backgroundIsolate = await Isolate.spawn(_fileWatcher, newReceivePort.sendPort);
     newReceivePort.listen((message) async {
       String detectedFilePath = message as String;
-      print("📂 New file detected in main isolate: $detectedFilePath");
       // await Future.delayed(Duration(seconds: 3));
-      mainFeature.addUploadQueue([{
+      mainFeature.addUploadQueue({
         "filePath": detectedFilePath,
         "folderID": cameraFolderID,
-      }]);
+      });
     });
     print("✅ Background Sync Started!");
   }
@@ -1754,12 +1688,14 @@ class _MyFilesPageState extends State<MyFilesPage> {
 
     for (var file in mediaFiles) {
       if (!cloudFiles.contains(file.path.split('/').last.split(r'\').last)) {
-        MainFeature uploader = MainFeature();
-        String cameraFolderID = await uploader.getFolderID("Camera", "0");
+        String cameraFolderID = await mainFeature.getFolderID("Camera", "0");
         if (cameraFolderID == "") {
-          cameraFolderID = await uploader.createCloudFolder("Camera", "0");
+          cameraFolderID = await mainFeature.createCloudFolder("Camera", "0");
         }
-        await uploader.uploadFile(file.path, cameraFolderID);
+        mainFeature.addUploadQueue({
+          "filePath": file.path,
+          'folderID': cameraFolderID
+        });
         lastBackupDate = DateTime.now();
         _saveSetting("last_backup_date", lastBackupDate);
       }
@@ -1930,8 +1866,7 @@ class _SyncPageState extends State<SyncPage> {
   @override
   void initState() {
     super.initState();
-    _loadSyncOrders(); 
-    _runPerformSync();
+    _loadSyncOrders();
     _watchFileCDM();
   }
 
@@ -1952,87 +1887,35 @@ class _SyncPageState extends State<SyncPage> {
         // Handle file/folder event based on type
         switch (eventType) {
           case 'create':
-            print("📥 File Created: $detectedFilePath");
             // TODO: Upload file or perform necessary actions
             break;
           case 'delete':
-            print("🗑️ File Deleted: $detectedFilePath");
             // TODO: Handle file deletion
             break;
           case 'modify':
-            print("✏️ File Modified: $detectedFilePath");
             // TODO: Handle file modification
             break;
           case 'move':
-            print("🔄 File Moved: $detectedFilePath");
             // TODO: Handle file move
             break;
           default:
-            print("⚠️ Unknown event detected: $eventType");
         }
       }
     });
-  }
-
-  Future<void> _runPerformSync() async {
-    if (!isSyncing) {
-      isSyncing = true;
-      try {
-        for (int index = 0; index < syncOrders.length; index++) {
-          if (syncOrders[index].isRunning) {
-            await _performSync(syncOrders[index]);
-          }
-        }
-      } catch (e) {
-        print("Error during sync: $e");
-      } finally {
-        isSyncing = false;
-      }
-    }
-
-    await Future.delayed(Duration(seconds: 20));
-    _runPerformSync();
   }
 
   /// Load sync orders from local storage
   Future<void> _loadSyncOrders() async {
-    final prefs = await SharedPreferences.getInstance();
-    final String? storedOrders = prefs.getString('sync_orders');
-    final String? storedSyncedFiles = prefs.getString('stored_files');
-    final dynamic? storedSyncedFileFolders = prefs.getString('scanned_data');
-
-    if (storedOrders != null && storedOrders != "" && storedOrders != {}) {
-    setState(() {
-        List<dynamic> decoded = jsonDecode(storedOrders);
-        syncOrders = decoded.map((e) => SyncOrder.fromJson(e)).toList();
-      });
-    }
-
-    if (storedSyncedFiles != null && storedSyncedFiles != "" && storedSyncedFiles != {}) {
-      setState(() {
-        List<dynamic> decoded = jsonDecode(storedSyncedFiles);
-        syncedFiles = decoded.map((e) => List<String>.from(e)).toList();
-      });
-    }
-
-    if (storedSyncedFileFolders != null && storedSyncedFileFolders != "" && storedSyncedFileFolders != {}) {
-      setState(() {
-        syncedFileFolders = jsonDecode(storedSyncedFileFolders);
-    });
-    }
+    syncOrders = mainFeature.syncOrders;
+    syncedFileFolders = mainFeature.syncedFileFolders;
+    syncedFiles = mainFeature.syncedFiles;
   }
 
   /// Save sync orders to local storage
   Future<void> _saveSyncOrders() async {
     final prefs = await SharedPreferences.getInstance();
-    String encodedOrders = jsonEncode(syncOrders.map((e) => e.toJson()).toList());
+    String encodedOrders = jsonEncode(mainFeature.syncOrders.map((e) => e.toJson()).toList());
     await prefs.setString('sync_orders', encodedOrders);
-  }
-
-  Future<void> _saveGlobal(key, value) async {
-    final prefs = await SharedPreferences.getInstance();
-    String encodedOrders = jsonEncode(value);
-    await prefs.setString(key, encodedOrders);
   }
 
   /// Add new Sync Order
@@ -2046,8 +1929,8 @@ class _SyncPageState extends State<SyncPage> {
       if (currentRemoteFldID == "") return;
     }
     setState(() {
-      syncOrders.add(SyncOrder(localPath: localPath, syncType: syncType, remotePath: remotePath, fld_id: currentRemoteFldID));
-      _toggleSync(syncOrders.length - 1);
+      mainFeature.syncOrders.add(SyncOrder(localPath: localPath, syncType: syncType, remotePath: remotePath, fld_id: currentRemoteFldID));
+      _toggleSync(mainFeature.syncOrders.length - 1);
     });
     _saveSyncOrders();
   }
@@ -2055,7 +1938,7 @@ class _SyncPageState extends State<SyncPage> {
   /// Delete Sync Order
   void _deleteSyncOrder(int index) {
     setState(() {
-      syncOrders.removeAt(index);
+      mainFeature.syncOrders.removeAt(index);
     });
     _saveSyncOrders();
   }
@@ -2063,7 +1946,7 @@ class _SyncPageState extends State<SyncPage> {
   /// Start/Stop Sync Order
   void _toggleSync(int index) async {
     setState(() {
-      syncOrders[index].isRunning = !syncOrders[index].isRunning;
+      mainFeature.syncOrders[index].isRunning = !mainFeature.syncOrders[index].isRunning;
     });
     _saveSyncOrders();
   }
@@ -2172,406 +2055,6 @@ class _SyncPageState extends State<SyncPage> {
     return selectedFolder;
   }
 
-  Future<void> _performSync(SyncOrder order) async {
-    print(order.syncType);
-    switch (order.syncType) {
-      case "Upload Only":
-        await _uploadFiles(order.localPath, order.fld_id);
-        break;
-      case "Download Only":
-        await _downloadFiles(order.localPath, order.fld_id);
-        break;
-      case "One-Way Sync":
-        await _onewaySync(order.localPath, order.fld_id);
-        break;
-      case "Two-Way Sync":
-        await _twowaySync(order.localPath, order.fld_id, _findFolderData(syncedFileFolders, order.fld_id));
-        break;
-    }
-
-    dynamic scanedData = await _scanCloudFiles("", "0");
-    syncedFileFolders = scanedData;
-    _saveGlobal('scaned_data', scanedData);
-
-  }
-
-  Future<void> _uploadFiles(String localPath, String folderID) async {
-    List<String> cloudFiles = [];
-    List<String> cloudFolders = [];
-    List<String> cloudFileCodes = [];
-    List<String> cloudFolderCodes = [];
-    List<String> localFiles = [];
-    List<String> localFolders = [];
-
-    Directory dir = Directory(localPath);
-    if (dir.existsSync()) {
-      localFiles = dir.listSync().whereType<File>().map((e) => e.path.split(Platform.pathSeparator).last).toList();
-      localFolders = dir
-        .listSync()
-        .whereType<Directory>()
-        .map((folder) => folder.path.split(Platform.pathSeparator).last)
-        .toList();
-    }
-    
-    final response = await http.get(
-      Uri.parse('$baseURL/folder/list?fld_id=$folderID&sess_id=${mainFeature.sessionId}'),
-    );
-
-    if (response.statusCode == 200) {
-      var data = jsonDecode(response.body);
-      cloudFiles = List<String>.from(data['result']['files'].map((file) => file['name']));
-      cloudFileCodes = List<String>.from(data['result']['files'].map((file) => file['file_code']));
-      cloudFolders = List<String>.from(data['result']['folders'].map((file) => file['name']));
-      cloudFolderCodes = List<String>.from(data['result']['folders'].map((file) => file['fld_id'].toString()));
-    }
-
-    for (String file in localFiles) {
-      if (!cloudFiles.contains(file)) {
-        String filePath = "$localPath${Platform.pathSeparator}$file";
-        File uploadFile = File(filePath);
-        if (uploadFile.existsSync()) {
-          MainFeature uploader = MainFeature();
-          await uploader.uploadFile(filePath, folderID);
-        }
-      }
-    }
-
-    for (String localFolder in localFolders) {
-      if (!cloudFolders.contains(localFolder)) {
-        String newFoldeId = await createCloudFolder(localFolder, folderID);
-        await _uploadFiles("$localPath/$localFolder", newFoldeId);
-      } else {
-        await _uploadFiles("$localPath/$localFolder", cloudFolderCodes[cloudFolders.indexOf(localFolder)]);
-      }
-    }
-
-  }
-
-  Future<void> _downloadFiles(String localPath, String folderID) async {
-    List<String> cloudFiles = [];
-    List<String> cloudFolders = [];
-    List<String> cloudFileCodes = [];
-    List<String> cloudFolderCodes = [];
-    List<String> localFiles = [];
-    List<String> localFolders = [];
-
-    Directory dir = Directory(localPath);
-    if (dir.existsSync()) {
-      localFiles = dir.listSync().whereType<File>().map((e) => e.path.split(Platform.pathSeparator).last).toList();
-      localFolders = dir
-        .listSync()
-        .whereType<Directory>()
-        .map((folder) => folder.path.split(Platform.pathSeparator).last)
-        .toList();
-    }
-    
-    final response = await http.get(
-      Uri.parse('$baseURL/folder/list?fld_id=$folderID&sess_id=${mainFeature.sessionId}'),
-    );
-
-    if (response.statusCode == 200) {
-      var data = jsonDecode(response.body);
-      cloudFiles = List<String>.from(data['result']['files'].map((file) => file['name']));
-      cloudFileCodes = List<String>.from(data['result']['files'].map((file) => file['file_code']));
-      cloudFolders = List<String>.from(data['result']['folders'].map((file) => file['name']));
-      cloudFolderCodes = List<String>.from(data['result']['folders'].map((file) => file['fld_id'].toString()));
-    }
-
-    for (int i = 0; i < cloudFiles.length; i++) {
-      String file = cloudFiles[i];
-      if (!localFiles.contains(file)) {
-        String downloadLink = await _getDownloadLink(cloudFileCodes[i]);
-        var response = await http.get(Uri.parse(downloadLink));
-        if (response.statusCode == 200) {
-          File localFile = File("$localPath${Platform.pathSeparator}$file");
-          await localFile.writeAsBytes(response.bodyBytes);
-          print("Downloaded: $file");
-        }
-      }
-    }
-
-    for (int i = 0; i < cloudFolders.length; i++) {
-      String cloudFolder = cloudFolders[i];
-      String cloudFolderCode = cloudFolderCodes[i];
-      await createFolderIfNotExists("$localPath${Platform.pathSeparator}$cloudFolder");
-      await _downloadFiles("$localPath${Platform.pathSeparator}$cloudFolder", cloudFolderCode);
-    }
-
-  }
-
-  Future<void> _onewaySync(String localPath, String folderID) async {
-    List<String> cloudFiles = [];
-    List<String> cloudFolders = [];
-    List<String> cloudFileCodes = [];
-    List<String> cloudFolderCodes = [];
-    List<String> localFiles = [];
-    List<String> localFolders = [];
-
-    Directory dir = Directory(localPath);
-    if (dir.existsSync()) {
-      localFiles = dir.listSync().whereType<File>().map((e) => e.path.split(Platform.pathSeparator).last).toList();
-      localFolders = dir
-        .listSync()
-        .whereType<Directory>()
-        .map((folder) => folder.path.split(Platform.pathSeparator).last)
-        .toList();
-    }
-    
-    final response = await http.get(
-      Uri.parse('$baseURL/folder/list?fld_id=$folderID&sess_id=${mainFeature.sessionId}'),
-    );
-
-    if (response.statusCode == 200) {
-      var data = jsonDecode(response.body);
-      cloudFiles = List<String>.from(data['result']['files'].map((file) => file['name']));
-      cloudFileCodes = List<String>.from(data['result']['files'].map((file) => file['file_code']));
-      cloudFolders = List<String>.from(data['result']['folders'].map((file) => file['name']));
-      cloudFolderCodes = List<String>.from(data['result']['folders'].map((file) => file['fld_id'].toString()));
-    }
-
-    for (String file in localFiles) {
-      if (!cloudFiles.contains(file)) {
-        String filePath = "$localPath${Platform.pathSeparator}$file";
-        File uploadFile = File(filePath);
-        if (uploadFile.existsSync()) {
-          MainFeature uploader = MainFeature();
-          await uploader.uploadFile(filePath, folderID);
-        }
-      }
-    }
-
-    for (int i = 0; i < cloudFiles.length; i++) {
-      String file = cloudFiles[i];
-      if (!localFiles.contains(file)) {
-        await http.get(Uri.parse('$baseURL/file/remove?file_code=${cloudFileCodes[i]}&remove=1&sess_id=${mainFeature.sessionId}'));
-        print("Deleted from cloud: $file");
-      }
-    }
-
-    for (String localFolder in localFolders) {
-      if (!cloudFolders.contains(localFolder)) {
-        String newFoldeId = await createCloudFolder(localFolder, folderID);
-        await _onewaySync("$localPath/$localFolder", newFoldeId);
-      } else {
-        await _onewaySync("$localPath/$localFolder", cloudFolderCodes[cloudFolders.indexOf(localFolder)]);
-      }
-    }
-
-  }
-
-  Future<void> _twowaySync(String localPath, String folderID, dynamic folderData) async {
-    List<String> cloudFiles = [];
-    List<String> cloudFolders = [];
-    List<String> cloudFileCodes = [];
-    List<String> cloudFolderCodes = [];
-    List<String> localFiles = [];
-    List<String> localFolders = [];
-    List<String> syncFiles = [];
-    List<dynamic> syncFolders = [];
-    List<String> syncFileCodes = [];
-    List<String> syncFolderCodes = [];
-
-    if (folderData == {} || folderData == null || folderData == "") {
-      await _uploadFiles(localPath, folderID);
-      await _downloadFiles(localPath, folderID);
-      return;
-    }
-
-    if (!folderData.containsKey('file') && !folderData.containsKey('folder')) {
-      await _uploadFiles(localPath, folderID);
-      await _downloadFiles(localPath, folderID);
-      return;
-    }
-
-    if (folderData.containsKey('file')) syncFiles = folderData['file'].keys.toList();
-    if (folderData.containsKey('file')) syncFileCodes = folderData['file'].values.toList();
-    if (folderData.containsKey('folder')) syncFolders = folderData['folder'];
-
-    List<String> syncFolderNames = syncFolders.map((folder) => folder['folder_name'] as String).toList();
-    syncFolderCodes = syncFolders.map((folder) => folder['folder_id'] as String).toList();
-    List<dynamic> syncFolderDatas = syncFolders.map((folder) => folder['folder_data'] as dynamic).toList();
-
-    Directory dir = Directory(localPath);
-    if (dir.existsSync()) {
-      localFiles = dir.listSync().whereType<File>().map((e) => e.path.split(Platform.pathSeparator).last).toList();
-      localFolders = dir
-        .listSync()
-        .whereType<Directory>()
-        .map((folder) => folder.path.split(Platform.pathSeparator).last)
-        .toList();
-    }
-
-    final response = await http.get(
-      Uri.parse('$baseURL/folder/list?fld_id=$folderID&sess_id=${mainFeature.sessionId}'),
-    );
-
-    if (response.statusCode == 200) {
-      var data = jsonDecode(response.body);
-      cloudFiles = List<String>.from(data['result']['files'].map((file) => file['name']));
-      cloudFileCodes = List<String>.from(data['result']['files'].map((file) => file['file_code']));
-      cloudFolders = List<String>.from(data['result']['folders'].map((file) => file['name']));
-      cloudFolderCodes = List<String>.from(data['result']['folders'].map((file) => file['fld_id'].toString()));
-    }
-
-    for (int i = 0; i < cloudFiles.length; i ++) {
-      String file = cloudFiles[i];
-      if (!syncFiles.contains(file)) {
-        String downloadLink = await _getDownloadLink(cloudFileCodes[i]);
-        var responseDownload = await http.get(Uri.parse(downloadLink));
-        if (responseDownload.statusCode == 200) {
-          File localFile = File("$localPath${Platform.pathSeparator}$file");
-          await localFile.writeAsBytes(responseDownload.bodyBytes);
-          print("Downloaded: $file");
-        }
-      }
-    }
-
-    for (String file in localFiles) {
-      if (!syncFiles.contains(file)) {
-        String filePath = "$localPath${Platform.pathSeparator}$file";
-        File uploadFile = File(filePath);
-        if (uploadFile.existsSync()) {
-          MainFeature uploader = MainFeature();
-          await uploader.uploadFile(filePath, folderID);
-        }
-      }
-    }
-
-    for (int i = 0; i < syncFiles.length; i ++) {
-      String file = syncFiles[i];
-      if(!localFiles.contains(file)) {
-        String fileToDeleteCode = syncFileCodes[i];
-        await http.get(Uri.parse('$baseURL/file/remove?file_code=$fileToDeleteCode&remove=1&sess_id=${mainFeature.sessionId}'));
-        print("Deleted from cloud: $file");
-      }
-      if(!cloudFiles.contains(file)) {
-        String filePath = "$localPath${Platform.pathSeparator}$file";
-        final deletefile = File(filePath);
-        if (await deletefile.exists()) {
-          await deletefile.delete();
-          print('File deleted: $filePath');
-        } else {
-          print('File not found: $filePath');
-        }
-      }
-    }
-
-    for (int i = 0; i < cloudFolders.length; i ++) {
-      String folder = cloudFolders[i];
-      String folderCode = cloudFolderCodes[i];
-      if (!syncFolderNames.contains(folder)) {
-        await createFolderIfNotExists("$localPath${Platform.pathSeparator}$folder");
-        await _downloadFiles("$localPath${Platform.pathSeparator}$folder", folderCode);
-      }
-    }
-
-    for (String folder in localFolders) {
-      if (!syncFolderNames.contains(folder)) {
-        if (!cloudFolders.contains(folder)) {
-          String newFoldeId = await createCloudFolder(folder, folderID);
-          await _uploadFiles("$localPath/$folder", newFoldeId);
-        } else {
-          await _uploadFiles("$localPath/$folder", cloudFolderCodes[cloudFolders.indexOf(folder)]);
-        }
-      }
-    }
-
-    for (int i = 0; i < syncFolderNames.length; i ++) {
-      String folder = syncFolderNames[i];
-      if (!localFolders.contains(folder)) {
-        await _deleteCloudFolder(syncFolderCodes[i]);
-      } else if (!cloudFolders.contains(folder)) {
-        await _deleteLocalFolder("$localPath/$folder");
-      } else {
-        await _twowaySync("$localPath/$folder", syncFolderCodes[i], syncFolderDatas[i]);
-      }
-    }
-
-  }
-
-  Future<dynamic> _scanCloudFiles(String folderName, String fldID) async {
-    dynamic scanedData = {};
-    // Update synced files.
-    final response = await http.get(
-      Uri.parse('$baseURL/folder/list?fld_id=$fldID&sess_id=${mainFeature.sessionId}'),
-    );
-
-    if (response.statusCode == 200) {
-      var data = jsonDecode(response.body);
-      List<String> cloudFiles = List<String>.from(data['result']['files'].map((file) => file['name']));
-      List<String> cloudFileCodes = List<String>.from(data['result']['files'].map((file) => file['file_code'].toString()));
-      List<String> cloudFolders = List<String>.from(data['result']['folders'].map((file) => file['name']));
-      List<String> cloudFolderIDs = List<String>.from(data['result']['folders'].map((file) => file['fld_id'].toString()));
-      scanedData['file'] = cloudFiles.asMap().map((i, f) => MapEntry(f, cloudFileCodes[i]));
-      scanedData['folder'] = [];
-      for (int i = 0; i < cloudFolders.length; i ++) {
-        String cloudFolder = cloudFolders[i];
-        String cloudFolderID = cloudFolderIDs[i];
-        dynamic cloudFolderData = await _scanCloudFiles(cloudFolder, cloudFolderID);
-        scanedData['folder'].add(cloudFolderData);
-      }
-    }
-    return {"folder_name": folderName, "folder_id": fldID, "folder_data": scanedData};
-
-  }
-
-  dynamic _findFolderData(dynamic fileFolder, String fldID) {
-    // Check if fileFolder is empty
-    if (fileFolder.isEmpty) return null; // Changed to return null for easier checks
-
-    // Check if the current folder matches the fldID
-    if (fileFolder['folder_id'] == fldID) return fileFolder['folder_data'];
-
-    // Check if folder_data exists and is a map
-    if (!fileFolder.containsKey('folder_data') || 
-        fileFolder['folder_data'] is! Map) return null;
-
-    // Iterate over the list of folders in folder_data
-    var folders = fileFolder['folder_data']['folder'];
-    if (folders is! List) return null; // Ensure it's a list
-
-    for (dynamic newFileFolder in folders) {
-      dynamic tmpFolderData = _findFolderData(newFileFolder, fldID);
-      if (tmpFolderData != null) return tmpFolderData; // Check against null
-    }
-
-    return null; // Return null if not found
-  }
-
-  Future<void> _deleteLocalFolder(String folderPath) async {
-      // Create a Directory object
-    var directory = Directory(folderPath);
-
-    // Check if the directory exists
-    if (directory.existsSync()) {
-      // Delete the directory
-      directory.deleteSync(recursive: true);
-      print('Folder deleted successfully.');
-    } else {
-      print('Folder does not exist.');
-    }
-  }
-
-  Future<void> _deleteCloudFolder(String folderID) async {
-    final response = await http.get(
-      Uri.parse('$baseURL/folder/delete?fld_id=$folderID&sess_id=${mainFeature.sessionId}'),
-    );
-    if (response.statusCode == 200) {
-      print("Successfully delete cloud folder $folderID.");
-    }
-  }
-
-  Future<String> _getDownloadLink(String fileCode) async {
-    final response = await http.get(
-      Uri.parse('$baseURL/file/direct_link?file_code=$fileCode&sess_id=${mainFeature.sessionId}'),
-    );
-    if (response.statusCode == 200) {
-      var data = jsonDecode(response.body);
-      return data['result']['url'];
-    }
-    return "";
-  }
-
   Future<String> getFolderID(String folderName, String parentFolderID) async {
     final response = await http.get(
       Uri.parse('$baseURL/folder/list?fld_id=$parentFolderID&sess_id=${mainFeature.sessionId}'),
@@ -2597,7 +2080,6 @@ class _SyncPageState extends State<SyncPage> {
   }
 
   Future<String> createCloudFolder(String localFolder, String parentId) async {
-    print(localFolder);
     final response = await http.get(
       Uri.parse('$baseURL/folder/create?parent_id=$parentId&name=$localFolder&sess_id=${mainFeature.sessionId}')
     );
@@ -2613,11 +2095,9 @@ class _SyncPageState extends State<SyncPage> {
 
     // Check if the directory exists
     if (await directory.exists()) {
-      print('Directory already exists: $path');
     } else {
       // Create the directory
       await directory.create(recursive: true);
-      print('Directory created: $path');
     }
   }
 
@@ -2655,9 +2135,9 @@ class _SyncPageState extends State<SyncPage> {
         children: [
           Expanded(
             child: ListView.builder(
-              itemCount: syncOrders.length,
+              itemCount: mainFeature.syncOrders.length,
               itemBuilder: (context, index) {
-                final order = syncOrders[index];
+                final order = mainFeature.syncOrders[index];
                 return Container(
                   margin: EdgeInsets.symmetric(vertical: 8.0), // Space between items
                   decoration: BoxDecoration(
@@ -2758,7 +2238,6 @@ class _UploadPageState extends State<UploadPage> {
       if (response.statusCode == 200) {
         var data = jsonDecode(response.body);
         uploadServer = data['result'];
-        print("Upload server initialized: $uploadServer");
       } else {
         print("Failed to get upload server: ${response.reasonPhrase}");
       }
@@ -2773,12 +2252,13 @@ class _UploadPageState extends State<UploadPage> {
       isLoading = true;
       uploadProgress = 0.0;
     });
-    MainFeature uploader = MainFeature();
     for (int i = 0; i< selectedFiles.length; i ++) {
       String filePath = selectedFiles[i];
-      print("File $filePath is uploading now...");
-      await uploader.uploadFile(filePath, "0");
-      print("File $filePath is uploaded.");
+      mainFeature.addUploadQueue({
+        "filePath": filePath,
+        "folderID": "0"
+      });
+      // await uploader.uploadFile(filePath, "0");
       uploadedItemCounts ++;
     }
     setState(() {
@@ -2912,6 +2392,106 @@ class _UploadPageState extends State<UploadPage> {
 
 }
 
+class Transfer extends StatefulWidget {
+  final MainFeature mainFeature;
+  Transfer({required this.mainFeature});
+
+  @override
+  _TransferState createState() => _TransferState(mainFeature: mainFeature);
+}
+
+class _TransferState extends State<Transfer> {
+  final MainFeature mainFeature;
+
+  _TransferState({required this.mainFeature});
+
+  @override
+  void initState() {
+    super.initState();
+    _startTimer();
+  }
+
+  void _startTimer() {
+    Future.delayed(Duration(milliseconds: 500), () {
+      if (mounted) {
+        setState(() {}); // Refresh UI
+        _startTimer();
+      }
+    });
+  }
+
+  String _getFileName(String filePath) {
+    return filePath.split('/').last; // Extracts last part of path
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        title: Text('File Transfers', style: TextStyle(color: Colors.black)),
+      ),
+      body: Column(
+        children: [
+          if (mainFeature.uploadQueue.isNotEmpty) ...[
+            _buildSectionTitle("Uploads"),
+            _buildFileList(mainFeature.uploadQueue, isUpload: true),
+          ],
+          if (mainFeature.downloadQueue.isNotEmpty) ...[
+            _buildSectionTitle("Downloads"),
+            _buildFileList(mainFeature.downloadQueue, isUpload: false),
+          ],
+          if (mainFeature.uploadQueue.isEmpty && mainFeature.downloadQueue.isEmpty)
+            Expanded(
+              child: Center(child: Text("No active transfers")),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSectionTitle(String title) {
+    return Padding(
+      padding: const EdgeInsets.all(10.0),
+      child: Text(
+        title,
+        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+      ),
+    );
+  }
+
+  Widget _buildFileList(List<dynamic> queue, {required bool isUpload}) {
+    return Expanded(
+      child: ListView.builder(
+        itemCount: queue.length,
+        itemBuilder: (context, index) {
+          var item = queue[index];
+          String fileName = isUpload ? _getFileName(item['filePath']) : item['fileName'];
+          
+          return ListTile(
+            leading: Icon(isUpload ? Icons.upload : Icons.download, color: Colors.blue),
+            title: Text(fileName, style: TextStyle(fontSize: 16)),
+            subtitle: _buildProgressBar(item), // Placeholder for progress
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildProgressBar(dynamic file) {
+    double progress = file['progress'] ?? 0.0; // Placeholder for progress
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        LinearProgressIndicator(value: progress, minHeight: 5),
+        SizedBox(height: 5),
+        Text("${(progress * 100).toStringAsFixed(1)}%"),
+      ],
+    );
+  }
+}
+
 class VideoPlayerScreen extends StatefulWidget {
   final File videoFile;
   VideoPlayerScreen({required this.videoFile});
@@ -2971,12 +2551,21 @@ class MainFeature {
   bool isFirstCall = true;
   int currentUploadingItemIndex = 0;
   int currentDownloadingItemIndex = 0;
+  
+  List<SyncOrder> syncOrders = [];
+  List<List<String>> syncedFiles = [];
+  dynamic syncedFileFolders = {};
+  bool isSyncing = false;
+  Isolate? _backgroundIsolate;
+  bool fromToday = false;
+  DateTime lastBackupDate = DateTime.now();
 
   Future<void> initState() async {
     if (isFirstCall) {
       await getSessionId();
       await _initializeServerUrl();
-      _infinitCycling();
+      await _loadSyncOrders();
+      _infinitCycling(); 
     }
     isFirstCall = false;
   }
@@ -2986,20 +2575,75 @@ class MainFeature {
     sessionId = prefs.getString('sessionId')!;
   }
 
-  void addUploadQueue(List<dynamic> uploadingItems) {
-    uploadQueue.addAll(uploadingItems);
+  Future<void> _saveGlobal(key, value) async {
+    final prefs = await SharedPreferences.getInstance();
+    String encodedOrders = jsonEncode(value);
+    await prefs.setString(key, encodedOrders);
   }
 
-  void adddownloadingQueue(List<dynamic> downloadingItems){
-    downloadQueue.addAll(downloadingItems);
+  void addUploadQueue(dynamic uploadingItem) {
+    for (int i = currentUploadingItemIndex; i < uploadQueue.length; i ++) {
+      if (uploadQueue[i]['filePath'] == uploadingItem['filePath']
+       && uploadQueue[i]['folderID'] == uploadingItem['folderID']) {
+        return;
+      }
+    }
+    uploadQueue.add({
+      ...uploadingItem,
+      'progress': 0.0,
+    });
+  }
+
+  void addDownloadingQueue(dynamic downloadingItem){
+    for (int i = currentDownloadingItemIndex; i < downloadQueue.length; i ++) {
+      if (downloadQueue[i]['fileCode'] == downloadingItem['fileCode']
+       && downloadQueue[i]['fileName'] == downloadingItem['fileName']
+       && downloadQueue[i]['filePath'] == downloadingItem['filePath']) {
+        return;
+      }
+    }
+    downloadQueue.add({
+      ...downloadingItem,
+      'progress': 0.0,
+    });
+  }
+
+  Future<void> _loadSyncOrders() async {
+    final prefs = await SharedPreferences.getInstance();
+    final String? storedOrders = prefs.getString('sync_orders');
+    final String? storedSyncedFiles = prefs.getString('stored_files');
+    final dynamic storedSyncedFileFolders = prefs.getString('scanned_data');
+
+    if (storedOrders != null && storedOrders != "" && storedOrders != {}) {
+      List<dynamic> decoded = jsonDecode(storedOrders);
+      syncOrders = decoded.map((e) => SyncOrder.fromJson(e)).toList();
+    }
+
+    if (storedSyncedFiles != null && storedSyncedFiles != "" && storedSyncedFiles != {}) {
+      List<dynamic> decoded = jsonDecode(storedSyncedFiles);
+      syncedFiles = decoded.map((e) => List<String>.from(e)).toList();
+    }
+
+    if (storedSyncedFileFolders != null && storedSyncedFileFolders != "" && storedSyncedFileFolders != {}) {
+      syncedFileFolders = jsonDecode(storedSyncedFileFolders);
+    }
+
+    if (prefs.getBool('autoCameraBackup') == true) {
+      _startBackup();
+    }
   }
 
   Future<void> _infinitCycling() async {
-    for(int i = 0; i < 10; i ++) {
+    for(int i = 0; i < 5; i ++) {
       if (uploadQueue.isNotEmpty && uploadQueue.length > currentUploadingItemIndex) {
         String fileCode = await uploadFile(
           uploadQueue[currentUploadingItemIndex]['filePath'], 
-          uploadQueue[currentUploadingItemIndex]['folderID']);
+          uploadQueue[currentUploadingItemIndex]['folderID'],
+          (progress) {
+            uploadQueue[currentUploadingItemIndex]['progress'] = progress;
+          }
+          );
+        uploadQueue[currentUploadingItemIndex]['progress'] = 1.0;
         uploadQueue[currentUploadingItemIndex]['fileCode'] = fileCode;
         currentUploadingItemIndex ++;
       }
@@ -3007,9 +2651,33 @@ class MainFeature {
         await downloadFile(downloadQueue[currentDownloadingItemIndex]['fileCode'], 
                           downloadQueue[currentDownloadingItemIndex]['fileName'],
                           downloadQueue[currentDownloadingItemIndex]['filePath']);
+        downloadQueue[currentDownloadingItemIndex]['progress'] = 1.0;
         currentDownloadingItemIndex ++;
       }
     }
+    
+    if (!isSyncing) {
+      isSyncing = true;
+      if (uploadQueue.isEmpty || uploadQueue.length == currentUploadingItemIndex) {
+        if (downloadQueue.isEmpty || downloadQueue.length == currentDownloadingItemIndex) {
+          try {
+            for (int index = 0; index < syncOrders.length; index++) {
+              if (syncOrders[index].isRunning) {
+                await _performSync(syncOrders[index]);
+              }
+            }
+          } catch (e) {
+            print("Error during sync: $e");
+          } finally {
+            dynamic scanedData = await _scanCloudFiles("", "0");
+            syncedFileFolders = scanedData;
+            _saveGlobal('scaned_data', scanedData);
+            isSyncing = false;
+          }
+        }
+      }
+    }
+
     await Future.delayed(Duration(seconds: 10));
     await _infinitCycling();
   }
@@ -3023,7 +2691,6 @@ class MainFeature {
       if (response.statusCode == 200) {
         var data = jsonDecode(response.body);
         serverUrl = data['result'];
-        print("Upload server initialized: $serverUrl");
       } else {
         print("Failed to get upload server: ${response.reasonPhrase}");
       }
@@ -3032,13 +2699,14 @@ class MainFeature {
     }
   }
 
-  Future<String> uploadFile(String filePath, String folderID) async {
-    print('trying to upload: $filePath');
-    if (serverUrl == null) {
+  Future<String> uploadFile(
+    String filePath, String folderID, Function(double) onProgress) async {
+
+    if (serverUrl.isEmpty) {
       print("No available upload server. Upload failed.");
       return "";
     }
-    // Check if the file exists
+
     File file = File(filePath);
     if (!await file.exists()) {
       print("File does not exist: $filePath");
@@ -3057,16 +2725,41 @@ class MainFeature {
       var data = jsonDecode(response.body);
       cloudFiles = List<String>.from(data['result']['files'].map((file) => file['name']));
     }
-    if(cloudFiles.contains(filePath.split('/').last.split(r'\').last)) return "";
+
+    if (cloudFiles.contains(filePath.split('/').last)) return "";
 
     try {
-      var request = http.MultipartRequest('POST', Uri.parse(serverUrl!));
+      var request = http.MultipartRequest('POST', Uri.parse(serverUrl));
       request.fields.addAll({
         'utype': 'prem',
         'sess_id': sessionId,
       });
 
-      request.files.add(await http.MultipartFile.fromPath('file_0', filePath));
+      var fileStream = http.ByteStream(file.openRead()); // Read file as stream
+      var length = await file.length();
+
+      var multipartFile = http.MultipartFile(
+        'file_0',
+        fileStream,
+        length,
+        filename: filePath.split('/').last,
+      );
+
+      request.files.add(multipartFile);
+
+      // Track progress
+      int uploadedBytes = 0;
+      Stream<List<int>> stream = fileStream.transform(
+        StreamTransformer.fromHandlers(handleData: (data, sink) {
+          uploadedBytes += data.length;
+          double progress = uploadedBytes / length;
+          onProgress(progress); // Update UI
+          sink.add(data);
+        }),
+      );
+
+      multipartFile = http.MultipartFile('file_0', stream, length, filename: filePath.split('/').last);
+      request.files[0] = multipartFile;
 
       http.StreamedResponse response = await request.send();
 
@@ -3084,7 +2777,60 @@ class MainFeature {
     }
     return "";
   }
-  
+
+  Future<void> uploadFolder(String localPath, String folderID) async {
+    List<String> cloudFiles = [];
+    List<String> cloudFolders = [];
+    List<String> cloudFileCodes = [];
+    List<String> cloudFolderCodes = [];
+    List<String> localFiles = [];
+    List<String> localFolders = [];
+
+    Directory dir = Directory(localPath);
+    if (dir.existsSync()) {
+      localFiles = dir.listSync().whereType<File>().map((e) => e.path.split(Platform.pathSeparator).last).toList();
+      localFolders = dir
+        .listSync()
+        .whereType<Directory>()
+        .map((folder) => folder.path.split(Platform.pathSeparator).last)
+        .toList();
+    }
+    
+    final response = await http.get(
+      Uri.parse('$baseURL/folder/list?fld_id=$folderID&sess_id=$sessionId'),
+    );
+
+    if (response.statusCode == 200) {
+      var data = jsonDecode(response.body);
+      cloudFiles = List<String>.from(data['result']['files'].map((file) => file['name']));
+      cloudFileCodes = List<String>.from(data['result']['files'].map((file) => file['file_code']));
+      cloudFolders = List<String>.from(data['result']['folders'].map((file) => file['name']));
+      cloudFolderCodes = List<String>.from(data['result']['folders'].map((file) => file['fld_id'].toString()));
+    }
+
+    for (String file in localFiles) {
+      if (!cloudFiles.contains(file)) {
+        String filePath = "$localPath${Platform.pathSeparator}$file";
+        File uploadFile = File(filePath);
+        if (uploadFile.existsSync()) {
+          addUploadQueue({
+            "filePath": filePath,
+            "folderID": folderID,
+          });
+        }
+      }
+    }
+
+    for (String localFolder in localFolders) {
+      if (!cloudFolders.contains(localFolder)) {
+        String newFoldeId = await createCloudFolder(localFolder, folderID);
+        await uploadFolder("$localPath/$localFolder", newFoldeId);
+      } else {
+        await uploadFolder("$localPath/$localFolder", cloudFolderCodes[cloudFolders.indexOf(localFolder)]);
+      }
+    }
+  }
+
   Future<void> moveFile(String fileCode, String folderID) async {
     await http.get(Uri.parse('$baseURL/file/set_folder?file_code=$fileCode&fld_id=$folderID&sess_id=$sessionId'));
   }
@@ -3160,7 +2906,6 @@ class MainFeature {
   Future<void> downloadFile(String fileCode, String fileName, String filePath) async {
     String parentDirectory = await getDownloadDirectory();
     String saveDirectory = "$parentDirectory/$filePath";
-    print("saveDirectory: $saveDirectory");
     
     try {
       String downloadLink = await _getDownloadLink(fileCode);
@@ -3188,24 +2933,23 @@ class MainFeature {
     }
   }
 
-  Future<void> downloadFolder(int folderID, String folderName, String subpath) async {
-    String saveDirectory= "$subpath/$folderName";
-    await createFolderIfNotExists(saveDirectory);
+  Future<void> downloadFolder(String folderID, String folderPath) async {
+    await createFolderIfNotExists(folderPath);
     dynamic fileFolders = await fetchFilesAndFolders(folderID);
     if (fileFolders.containsKey('folders')) {
       dynamic folders = fileFolders['folders'];
       for (dynamic folder in folders) {
-        await downloadFolder(folder['fld_id'], folder['name'], saveDirectory);
+        await downloadFolder(folder['fld_id'], "$folderPath/${folder['name']}");
       }
     }
     if (fileFolders.containsKey('files')) {
       dynamic files = fileFolders['files'];
       for (dynamic file in files) {
-        adddownloadingQueue([{
+        addDownloadingQueue({
           "fileCode": file['file_code'], 
           "fileName": file['name'], 
-          "filePath": saveDirectory
-        }]);
+          "filePath": folderPath
+        });
       }
     }
   }
@@ -3216,11 +2960,9 @@ class MainFeature {
 
     // Check if the directory exists
     if (await directory.exists()) {
-      print('Directory already exists: $path');
     } else {
       // Create the directory
       await directory.create(recursive: true);
-      print('Directory created: $path');
     }
   }
 
@@ -3238,28 +2980,26 @@ class MainFeature {
     }
   }
 
-  Future<void> removeFile(dynamic item) async {
-    print(item);
+  Future<void> removeCloudItem(dynamic item) async {
     if(item.containsKey('file_code')) {
       String fileCode = item['file_code'].toString();
       final response = await http.get(
         Uri.parse('$baseURL/file/remove?file_code=$fileCode&remove=1&sess_id=$sessionId'),
       );
       if (response.statusCode == 200) {
-        print('Successfully removed.');
       } else {
-        print("Failed to remove.");
       }
     } else {
       String folderID = item['fld_id'].toString();
-      final response = await http.get(
-        Uri.parse('$baseURL/folder/delete?fld_id=$folderID&sess_id=$sessionId'),
-      );
-      if (response.statusCode == 200) {
-        print('Successfully removed.');
-      } else {
-        print("Failed to remove.");
-      }
+      await removeFolder(folderID);
+    }
+  }
+
+  Future<void> removeFolder(String folderID) async {
+    final response = await http.get(
+      Uri.parse('$baseURL/folder/delete?fld_id=$folderID&sess_id=$sessionId'),
+    );
+    if (response.statusCode == 200) {
     }
   }
 
@@ -3280,9 +3020,392 @@ class MainFeature {
     }
     
     if (response.statusCode == 200) {
-      print('Successfully rename ${item['name']} to $newName.');
     } else {
       print('Rename ${item.name} failed');
+    }
+  }
+
+  Future<void> _performSync(SyncOrder order) async {
+    switch (order.syncType) {
+      case "Upload Only":
+        await uploadFolder(order.localPath, order.fld_id);
+        break;
+      case "Download Only":
+        await downloadFolder(order.fld_id, order.localPath, );
+        break;
+      case "One-Way Sync":
+        await _onewaySync(order.localPath, order.fld_id);
+        break;
+      case "Two-Way Sync":
+        await _twowaySync(order.localPath, order.fld_id, _findFolderData(syncedFileFolders, order.fld_id));
+        break;
+    }
+  }
+
+  Future<dynamic> _scanCloudFiles(String folderName, String fldID) async {
+    dynamic scanedData = {};
+    // Update synced files.
+    final response = await http.get(
+      Uri.parse('$baseURL/folder/list?fld_id=$fldID&sess_id=$sessionId'),
+    );
+
+    if (response.statusCode == 200) {
+      var data = jsonDecode(response.body);
+      List<String> cloudFiles = List<String>.from(data['result']['files'].map((file) => file['name']));
+      List<String> cloudFileCodes = List<String>.from(data['result']['files'].map((file) => file['file_code'].toString()));
+      List<String> cloudFolders = List<String>.from(data['result']['folders'].map((file) => file['name']));
+      List<String> cloudFolderIDs = List<String>.from(data['result']['folders'].map((file) => file['fld_id'].toString()));
+      scanedData['file'] = cloudFiles.asMap().map((i, f) => MapEntry(f, cloudFileCodes[i]));
+      scanedData['folder'] = [];
+      for (int i = 0; i < cloudFolders.length; i ++) {
+        String cloudFolder = cloudFolders[i];
+        String cloudFolderID = cloudFolderIDs[i];
+        dynamic cloudFolderData = await _scanCloudFiles(cloudFolder, cloudFolderID);
+        scanedData['folder'].add(cloudFolderData);
+      }
+    }
+    return {"folder_name": folderName, "folder_id": fldID, "folder_data": scanedData};
+
+  }
+
+  Future<void> _onewaySync(String localPath, String folderID) async {
+    List<String> cloudFiles = [];
+    List<String> cloudFolders = [];
+    List<String> cloudFileCodes = [];
+    List<String> cloudFolderCodes = [];
+    List<String> localFiles = [];
+    List<String> localFolders = [];
+
+    Directory dir = Directory(localPath);
+    if (dir.existsSync()) {
+      localFiles = dir.listSync().whereType<File>().map((e) => e.path.split(Platform.pathSeparator).last).toList();
+      localFolders = dir
+        .listSync()
+        .whereType<Directory>()
+        .map((folder) => folder.path.split(Platform.pathSeparator).last)
+        .toList();
+    }
+    
+    final response = await http.get(
+      Uri.parse('$baseURL/folder/list?fld_id=$folderID&sess_id=$sessionId'),
+    );
+
+    if (response.statusCode == 200) {
+      var data = jsonDecode(response.body);
+      cloudFiles = List<String>.from(data['result']['files'].map((file) => file['name']));
+      cloudFileCodes = List<String>.from(data['result']['files'].map((file) => file['file_code']));
+      cloudFolders = List<String>.from(data['result']['folders'].map((file) => file['name']));
+      cloudFolderCodes = List<String>.from(data['result']['folders'].map((file) => file['fld_id'].toString()));
+    }
+
+    for (String file in localFiles) {
+      if (!cloudFiles.contains(file)) {
+        String filePath = "$localPath${Platform.pathSeparator}$file";
+        File uploadFile = File(filePath);
+        if (uploadFile.existsSync()) {
+          addUploadQueue({
+            "filePath": filePath,
+            "folderID": folderID,
+          });
+        }
+      }
+    }
+
+    for (int i = 0; i < cloudFiles.length; i++) {
+      String file = cloudFiles[i];
+      if (!localFiles.contains(file)) {
+        await http.get(Uri.parse('$baseURL/file/remove?file_code=${cloudFileCodes[i]}&remove=1&sess_id=$sessionId'));
+      }
+    }
+
+    for (String localFolder in localFolders) {
+      if (!cloudFolders.contains(localFolder)) {
+        String newFoldeId = await createCloudFolder(localFolder, folderID);
+        await _onewaySync("$localPath/$localFolder", newFoldeId);
+      } else {
+        await _onewaySync("$localPath/$localFolder", cloudFolderCodes[cloudFolders.indexOf(localFolder)]);
+      }
+    }
+
+  }
+
+  Future<void> _twowaySync(String localPath, String folderID, dynamic folderData) async {
+    List<String> cloudFiles = [];
+    List<String> cloudFolders = [];
+    List<String> cloudFileCodes = [];
+    List<String> cloudFolderCodes = [];
+    List<String> localFiles = [];
+    List<String> localFolders = [];
+    List<String> syncFiles = [];
+    List<dynamic> syncFolders = [];
+    List<String> syncFileCodes = [];
+    List<String> syncFolderCodes = [];
+
+    if (folderData == {} || folderData == null || folderData == "") {
+      await uploadFolder(localPath, folderID);
+      await downloadFolder(localPath, folderID);
+      return;
+    }
+
+    if (!folderData.containsKey('file') && !folderData.containsKey('folder')) {
+      await uploadFolder(localPath, folderID);
+      await downloadFolder(localPath, folderID);
+      return;
+    }
+
+    if (folderData.containsKey('file')) syncFiles = folderData['file'].keys.toList();
+    if (folderData.containsKey('file')) syncFileCodes = folderData['file'].values.toList();
+    if (folderData.containsKey('folder')) syncFolders = folderData['folder'];
+
+    List<String> syncFolderNames = syncFolders.map((folder) => folder['folder_name'] as String).toList();
+    syncFolderCodes = syncFolders.map((folder) => folder['folder_id'] as String).toList();
+    List<dynamic> syncFolderDatas = syncFolders.map((folder) => folder['folder_data'] as dynamic).toList();
+
+    Directory dir = Directory(localPath);
+    if (dir.existsSync()) {
+      localFiles = dir.listSync().whereType<File>().map((e) => e.path.split(Platform.pathSeparator).last).toList();
+      localFolders = dir
+        .listSync()
+        .whereType<Directory>()
+        .map((folder) => folder.path.split(Platform.pathSeparator).last)
+        .toList();
+    }
+
+    final response = await http.get(
+      Uri.parse('$baseURL/folder/list?fld_id=$folderID&sess_id=$sessionId'),
+    );
+
+    if (response.statusCode == 200) {
+      var data = jsonDecode(response.body);
+      cloudFiles = List<String>.from(data['result']['files'].map((file) => file['name']));
+      cloudFileCodes = List<String>.from(data['result']['files'].map((file) => file['file_code']));
+      cloudFolders = List<String>.from(data['result']['folders'].map((file) => file['name']));
+      cloudFolderCodes = List<String>.from(data['result']['folders'].map((file) => file['fld_id'].toString()));
+    }
+
+    for (int i = 0; i < cloudFiles.length; i ++) {
+      String file = cloudFiles[i];
+      if (!syncFiles.contains(file)) {
+        addDownloadingQueue({
+          "fileCode": cloudFileCodes[i], 
+          "fileName": file, 
+          "filePath": localPath
+        });
+      }
+    }
+
+    for (String file in localFiles) {
+      if (!syncFiles.contains(file)) {
+        String filePath = "$localPath${Platform.pathSeparator}$file";
+        File uploadFile = File(filePath);
+        if (uploadFile.existsSync()) {
+          addUploadQueue({
+            "filePath": filePath,
+            "folderID": folderID,
+          });
+        }
+      }
+    }
+
+    for (int i = 0; i < syncFiles.length; i ++) {
+      String file = syncFiles[i];
+      if(!localFiles.contains(file)) {
+        removeCloudItem({'file_code': syncFileCodes[i]});
+      }
+      if(!cloudFiles.contains(file)) {
+        String filePath = "$localPath${Platform.pathSeparator}$file";
+        final deletefile = File(filePath);
+        if (await deletefile.exists()) {
+          await deletefile.delete();
+        } else {
+        }
+      }
+    }
+
+    for (int i = 0; i < cloudFolders.length; i ++) {
+      String folder = cloudFolders[i];
+      String folderCode = cloudFolderCodes[i];
+      if (!syncFolderNames.contains(folder)) {
+        await createFolderIfNotExists("$localPath${Platform.pathSeparator}$folder");
+        await downloadFolder("$localPath${Platform.pathSeparator}$folder", folderCode);
+      }
+    }
+
+    for (String folder in localFolders) {
+      if (!syncFolderNames.contains(folder)) {
+        if (!cloudFolders.contains(folder)) {
+          String newFoldeId = await createCloudFolder(folder, folderID);
+          await uploadFolder("$localPath/$folder", newFoldeId);
+        } else {
+          await uploadFolder("$localPath/$folder", cloudFolderCodes[cloudFolders.indexOf(folder)]);
+        }
+      }
+    }
+
+    for (int i = 0; i < syncFolderNames.length; i ++) {
+      String folder = syncFolderNames[i];
+      if (!localFolders.contains(folder)) {
+        await removeFolder(syncFolderCodes[i]);
+      } else if (!cloudFolders.contains(folder)) {
+        await _deleteLocalFolder("$localPath/$folder");
+      } else {
+        await _twowaySync("$localPath/$folder", syncFolderCodes[i], syncFolderDatas[i]);
+      }
+    }
+
+  }
+
+  Future<void> _deleteLocalFolder(String folderPath) async {
+      // Create a Directory object
+    var directory = Directory(folderPath);
+
+    // Check if the directory exists
+    if (directory.existsSync()) {
+      // Delete the directory
+      directory.deleteSync(recursive: true);
+    } else {
+    }
+  }
+
+  dynamic _findFolderData(dynamic fileFolder, String fldID) {
+    // Check if fileFolder is empty
+    if (fileFolder.isEmpty) return null; // Changed to return null for easier checks
+
+    // Check if the current folder matches the fldID
+    if (fileFolder['folder_id'] == fldID) return fileFolder['folder_data'];
+
+    // Check if folder_data exists and is a map
+    if (!fileFolder.containsKey('folder_data') || 
+        fileFolder['folder_data'] is! Map) return null;
+
+    // Iterate over the list of folders in folder_data
+    var folders = fileFolder['folder_data']['folder'];
+    if (folders is! List) return null; // Ensure it's a list
+
+    for (dynamic newFileFolder in folders) {
+      dynamic tmpFolderData = _findFolderData(newFileFolder, fldID);
+      if (tmpFolderData != null) return tmpFolderData; // Check against null
+    }
+
+    return null; // Return null if not found
+  }
+
+  void _startBackup() async {
+    print("✅ Background Sync Started!");
+    String cameraFolderID = await getFolderID("Camera", "0");
+      if (cameraFolderID == "") {
+        cameraFolderID = await createCloudFolder("Camera", "0");
+      }
+    _uploadCameraFolder(cameraFolderID);
+    if (_backgroundIsolate != null) return;
+    ReceivePort newReceivePort = ReceivePort();
+    _backgroundIsolate = await Isolate.spawn(_fileWatcher, newReceivePort.sendPort);
+    newReceivePort.listen((message) async {
+      String detectedFilePath = message as String;
+      // await Future.delayed(Duration(seconds: 3));
+      addUploadQueue({
+        "filePath": detectedFilePath,
+        "folderID": cameraFolderID,
+      });
+    });
+    print("✅ Background Sync Started!");
+  }
+
+  Future<void> _uploadCameraFolder(String cameraFolderID) async {
+    bool hasPermission = await _requestStoragePermission();
+    if (!hasPermission) {
+      print("❌ Storage permission denied");
+      return;
+    }
+    List<String> cloudFiles = [];
+    final response = await http.get(
+      Uri.parse('$baseURL/folder/list?fld_id=$cameraFolderID&sess_id=$sessionId'),
+    );
+
+    if (response.statusCode == 200) {
+      var data = jsonDecode(response.body);
+      cloudFiles = List<String>.from(data['result']['files'].map((file) => file['name']));
+    }
+
+    List<FileSystemEntity> mediaFiles = [];
+
+    if (Platform.isAndroid) {
+      // For Android: Accessing the DCIM/Camera folder
+      const String directoryPath = "/storage/emulated/0/DCIM/Camera";
+      final directory = Directory(directoryPath);
+      if (directory.existsSync()) {
+        mediaFiles = directory.listSync().where(
+          (file) {
+            if (file is File) {
+              final ext = file.path.split('.').last.toLowerCase();
+              return ["jpg", "jpeg", "png", "mp4", "mov"].contains(ext);
+            }
+            return false;
+          },
+        ).toList();
+      }
+    } else if (Platform.isIOS) {
+    }
+
+    if (fromToday) {
+      final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
+      mediaFiles = mediaFiles.where((file) {
+        return FileStat.statSync(file.path).modified.isAfter(DateTime.parse(today));
+      }).toList();
+    }
+
+    for (var file in mediaFiles) {
+      if (!cloudFiles.contains(file.path.split('/').last.split(r'\').last)) {
+        String cameraFolderID = await getFolderID("Camera", "0");
+        if (cameraFolderID == "") {
+          cameraFolderID = await createCloudFolder("Camera", "0");
+        }
+        addUploadQueue({
+          "filePath": file.path,
+          'folderID': cameraFolderID
+        });
+        lastBackupDate = DateTime.now();
+        _saveSetting("last_backup_date", lastBackupDate);
+      }
+    }
+    print("Backup completed: ${mediaFiles.length} files uploaded");
+  }
+
+  Future<bool> _requestStoragePermission() async {
+    if (Platform.isAndroid) {
+      // Android storage permission
+      if (await Permission.storage.request().isGranted) {
+        return true;
+      }
+      if (await Permission.manageExternalStorage.request().isGranted) {
+        return true;
+      }
+    } else if (Platform.isIOS) {
+      // iOS photo library permission
+      if (await Permission.photos.request().isGranted) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  Future<void> _saveSetting(String key, dynamic value) async {
+    final prefs = await SharedPreferences.getInstance();
+
+    if (value is bool) {
+      await prefs.setBool(key, value);
+    } else if (value is String) {
+      await prefs.setString(key, value);
+    } else if (value is int) {
+      await prefs.setInt(key, value);
+    } else if (value is double) {
+      await prefs.setDouble(key, value);
+    } else if (value is List<String>) {
+      await prefs.setStringList(key, value);
+    } else if (value is DateTime) {
+      await prefs.setString(key, value.toString());
+    } else {
+      throw ArgumentError("Unsupported type for SharedPreferences");
     }
   }
 
@@ -3299,7 +3422,6 @@ void _fileWatcher(SendPort sendPort) async {
 
   directory.watch(events: FileSystemEvent.create).listen((event) async {
     if (event.type == FileSystemEvent.create) {
-      print("📂 New file detected: ${event.path}");
       sendPort.send(event.path); // Send file path to main isolate
     }
   });
@@ -3324,16 +3446,13 @@ void _filefolderWatcher(SendPort sendPort) async {
           // Watch the subdirectory
           entity.watch(events: FileSystemEvent.all).listen((event) {
             if (event.type == FileSystemEvent.create) {
-              print("📂 File/Folder Created: ${event.path}");
               sendPort.send({'event': 'create', 'path': event.path});
             } else if (event.type == FileSystemEvent.delete) {
-              print("🗑️ File/Folder Deleted: ${event.path}");
               sendPort.send({'event': 'delete', 'path': event.path});
             // } else if (event.type == FileSystemEvent.modify) {
             //   print("✏️ File/Folder Modified: ${event.path}");
             //   sendPort.send({'event': 'modify', 'path': event.path});
             } else if (event.type == FileSystemEvent.move) {
-              print("🔄 File/Folder Moved: ${event.path}");
               sendPort.send({'event': 'move', 'path': event.path});
             }
           });
@@ -3349,16 +3468,12 @@ void _filefolderWatcher(SendPort sendPort) async {
   // Watch the main directory
   directory.watch(events: FileSystemEvent.all).listen((event) {
     if (event.type == FileSystemEvent.create) {
-      print("📂 File/Folder Created: ${event.path}");
       sendPort.send({'event': 'create', 'path': event.path});
     } else if (event.type == FileSystemEvent.delete) {
-      print("🗑️ File/Folder Deleted: ${event.path}");
       sendPort.send({'event': 'delete', 'path': event.path});
     // } else if (event.type == FileSystemEvent.modify) {
-    //   print("✏️ File/Folder Modified: ${event.path}");
     //   sendPort.send({'event': 'modify', 'path': event.path});
     } else if (event.type == FileSystemEvent.move) {
-      print("🔄 File/Folder Moved: ${event.path}");
       sendPort.send({'event': 'move', 'path': event.path});
     }
   });
@@ -3366,4 +3481,3 @@ void _filefolderWatcher(SendPort sendPort) async {
   // Watch the subdirectories
   watchSubdirectories(directory);
 }
-
