@@ -718,9 +718,8 @@ class _MyFilesPageState extends State<MyFilesPage> {
                   shape: CircleBorder(), // Maintain circular shape for the FAB
                   child: FloatingActionButton(
                     onPressed: () {
-                      // Action for the "+" button
                       print("Add new item action");
-                      // You can navigate or show a dialog to add a new file/folder, for example
+                      _pickFiles();
                     },
                     child: Icon(Icons.add, color: Colors.white),
                     backgroundColor: Colors.blue,
@@ -1480,7 +1479,7 @@ class _MyFilesPageState extends State<MyFilesPage> {
       // mainFeature._startBackup();
     }
     if (prefs.getString('last_backup_date') != "") {
-      print("last_backup_date: ${prefs.getString('last_backup_date')}");
+      // print("last_backup_date: ${prefs.getString('last_backup_date')}");
     }
   }
 
@@ -1524,6 +1523,27 @@ class _MyFilesPageState extends State<MyFilesPage> {
     }
   }
 
+  Future<void> _pickFiles() async {
+    List<String> selectedFiles = [];
+    try {
+      final result = await FilePicker.platform.pickFiles(allowMultiple: true);
+      if (result != null) {
+        selectedFiles = result.paths.map((path) => path!).toList();
+        for(int i = 0; i < selectedFiles.length; i ++) {
+          String filePath = selectedFiles[i];
+          mainFeature.addUploadQueue({
+            "filePath": filePath,
+            "folderID": "0"
+          });
+        }
+      }
+    } catch (e) {
+      // Handle error
+      print('Error picking files: $e');
+    } finally {
+    }
+  }
+
   void _openURL(String url) async {
     Uri uri = Uri.parse(url);
 
@@ -1531,18 +1551,9 @@ class _MyFilesPageState extends State<MyFilesPage> {
       // Use `Process.start` on Windows instead of `launchUrl`
       await Process.start('explorer.exe', [url]);
     } else {
-      // setState(() {
-      //   errorMessage += "NotWin...";
-      // });
       if (await canLaunchUrl(uri)) {
-        // setState(() {
-        //   errorMessage += "Can Launch Url...";
-        // });
         await launchUrl(uri, mode: LaunchMode.inAppWebView);
       } else {
-        // setState(() {
-        //   errorMessage += "❌ Could not open: $url...";
-        // });
         print("❌ Could not open: $url");
       }
     }
@@ -2535,6 +2546,7 @@ class MainFeature {
   Isolate? _backgroundIsolate;
   bool fromToday = false;
   DateTime lastBackupDate = DateTime.now();
+  int lastScanCount = -1;
 
   Future<void> initState() async {
     if (isFirstCall) {
@@ -2558,7 +2570,7 @@ class MainFeature {
   }
 
   void addUploadQueue(dynamic uploadingItem) {
-    for (int i = currentUploadingItemIndex; i < uploadQueue.length; i ++) {
+    for (int i = 0; i < uploadQueue.length; i ++) {
       if (uploadQueue[i]['filePath'] == uploadingItem['filePath']
        && uploadQueue[i]['folderID'] == uploadingItem['folderID']) {
         return;
@@ -2612,7 +2624,7 @@ class MainFeature {
   Future<void> _infinitCycling() async {
     for(int i = 0; i < 5; i ++) {
       if (uploadQueue.isNotEmpty && uploadQueue.length > currentUploadingItemIndex) {
-        uploadFile(
+        await uploadFile(
           currentUploadingItemIndex,
           (progress) {
             uploadQueue[currentUploadingItemIndex]['progress'] = progress;
@@ -2639,10 +2651,13 @@ class MainFeature {
           } catch (e) {
             print("Error during sync: $e");
           } finally {
-            dynamic scanedData = await _scanCloudFiles("", "0");
-            syncedFileFolders = scanedData;
-            _saveGlobal('scaned_data', scanedData);
-            isSyncing = false;
+            if (currentUploadingItemIndex + currentDownloadingItemIndex > lastScanCount) {
+              dynamic scanedData = await _scanCloudFiles("", "0");
+              syncedFileFolders = scanedData;
+              _saveGlobal('scaned_data', scanedData);
+              isSyncing = false;
+            }
+            lastScanCount = currentUploadingItemIndex + currentDownloadingItemIndex;
           }
         }
       }
@@ -2741,15 +2756,18 @@ class MainFeature {
 
       if (response.statusCode == 200) {
         String responseString = await response.stream.bytesToString();
+        uploadQueue[index]['progress'] = 1.0;
         print("Upload successful: $responseString");
         final List<dynamic> responseData = jsonDecode(responseString);
         await moveFile(responseData[0]['file_code'], folderID);
         return responseData[0]['file_code'];
       } else {
         print("Upload failed: ${response.reasonPhrase}");
+        uploadQueue[index]['isRemoved'] = true;
       }
     } catch (e) {
       print("Upload error: $e");
+      uploadQueue[index]['isRemoved'] = true;
     }
     return "went wrong";
   }
