@@ -1693,7 +1693,7 @@ class _MyFilesPageState extends State<MyFilesPage> {
                   title: Text("Create Folder"),
                   onTap: () {
                     Navigator.pop(context);
-                    _createQuickNoteDialog(context);
+                    _createFolderDialog(context);
                   },
                 ),
                 ListTile(
@@ -1780,9 +1780,50 @@ class _MyFilesPageState extends State<MyFilesPage> {
     );
   }
 
-  void _createFolder(BuildContext context) {
-    // print("Folder created: $folderName");
-    // Implement folder creation logic
+  void _createFolderDialog(BuildContext context) {
+    TextEditingController folderNameController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text("Create Folder"),
+          content: TextField(
+            controller: folderNameController,
+            decoration: InputDecoration(hintText: "Enter folder name"),
+          ),
+          actions: <Widget>[
+            TextButton(
+              child: Text("Cancel"),
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+            ),
+            TextButton(
+              child: Text("Create"),
+              onPressed: () async {
+                String folderName = folderNameController.text.trim();
+                if (folderName.isNotEmpty) {
+                  try {
+                    await mainFeature.createCloudFolder(folderName, visitedFolderIDs.last.first.toString());
+                    Navigator.of(context).pop();
+                    _refreshPage();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text("Folder '$folderName' created successfully")),
+                    );
+                  } catch (e) {
+                    // Handle errors
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text("Failed to create folder: $e")),
+                    );
+                  }
+                }
+              },
+            ),
+          ],
+        );
+      },
+    );
   }
 
   void _uploadNoteAsFile(String note) {
