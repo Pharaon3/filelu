@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:http/http.dart' as http;
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
@@ -470,6 +471,9 @@ class _MyFilesPageState extends State<MyFilesPage> {
   final MainFeature mainFeature;
   DateTime lastBackupDate = DateTime.now();
 
+  final ScrollController _scrollController = ScrollController();
+  bool _isPlusButtonVisible = true;
+
   _MyFilesPageState({required this.mainFeature});
 
   @override
@@ -477,6 +481,32 @@ class _MyFilesPageState extends State<MyFilesPage> {
     super.initState();
     _fetchFilesAndFolders(0);
     _loadSettings();
+    _scrollController.addListener(_scrollListener);
+  }
+
+  void _scrollListener() {
+    if (_scrollController.position.userScrollDirection == ScrollDirection.reverse) {
+      // User is scrolling down, hide the FAB
+      if (_isPlusButtonVisible) {
+        setState(() {
+          _isPlusButtonVisible = false;
+        });
+      }
+    } else if (_scrollController.position.userScrollDirection == ScrollDirection.forward) {
+      // User is scrolling up, show the FAB
+      if (!_isPlusButtonVisible) {
+        setState(() {
+          _isPlusButtonVisible = true;
+        });
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _scrollController.removeListener(_scrollListener);
+    _scrollController.dispose();
+    super.dispose();
   }
 
   // Fetch files and folders using the API
@@ -659,11 +689,11 @@ class _MyFilesPageState extends State<MyFilesPage> {
       appBar: AppBar(
         backgroundColor: Colors.white,
         title: Text(
-          selectionMode 
-            ? "${selectedItems.length} selected" 
-            : (visitedFolderIDs.last.last != '/'
-                ? visitedFolderIDs.last.last 
-                : 'My Files'),
+          selectionMode
+              ? "${selectedItems.length} selected"
+              : (visitedFolderIDs.last.last != '/'
+                  ? visitedFolderIDs.last.last
+                  : 'My Files'),
         ),
         leading: IconButton(
           icon: Icon(selectionMode ? Icons.close : Icons.arrow_back, color: Colors.blue),
@@ -714,197 +744,193 @@ class _MyFilesPageState extends State<MyFilesPage> {
           ],
         ],
       ),
-      floatingActionButton: Stack(
-        children: [
-            Positioned(
-              child: Material(
-                shape: CircleBorder(), // Maintain circular shape for the FAB
-                child: FloatingActionButton(
-                  onPressed: () {
-                    _showAddOptionsDialog(context);
-                  },
-                  backgroundColor: Colors.blue,
-                  child: Icon(Icons.add, color: Colors.white),
+      floatingActionButton: _isPlusButtonVisible
+          ? Stack(
+              children: [
+                Positioned(
+                  child: Material(
+                    shape: CircleBorder(), // Maintain circular shape for the FAB
+                    child: FloatingActionButton(
+                      onPressed: () {
+                        _showAddOptionsDialog(context);
+                      },
+                      backgroundColor: Colors.blue,
+                      child: Icon(Icons.add, color: Colors.white),
+                    ),
+                  ),
                 ),
-              ),
-            ),
-          if (copyStatus != 0)
-          Positioned(
-            left: 16,
-            bottom: 16,
-            child: Padding(
-              padding: const EdgeInsets.only(left: 12.0), // Add padding for more space on the left
-              child: FloatingActionButton(
-                onPressed: _pasteFile,
-                child: Icon(Icons.paste, color: Colors.blue),
-              ),
-            ),
-          ),
-        ],
-      ),
+                if (copyStatus != 0)
+                  Positioned(
+                    left: 16,
+                    bottom: 16,
+                    child: Padding(
+                      padding: const EdgeInsets.only(left: 12.0),
+                      child: FloatingActionButton(
+                        onPressed: _pasteFile,
+                        child: Icon(Icons.paste, color: Colors.blue),
+                      ),
+                    ),
+                  ),
+              ],
+            )
+          : Container(),
       body: isLoading
           ? Center(child: CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(Colors.blue)))
           : RefreshIndicator(
-            onRefresh: _refreshPage, // Function to reload page
-            color: Colors.blue, // Set refresh indicator color
-            child:Column(
-              children: [
-                Expanded(
-                  child: ListView(
-                    children: [
-                      if (getPaginatedItems().isNotEmpty) ...[
-                        // Display Folders
-                        if (folders.isNotEmpty)
-                          ...getPaginatedItems()
-                              .where((item) => !item.containsKey('file_code'))
-                              .map((folder) {
-                            bool isSelected = selectedItems.contains(folder);
-                            return GestureDetector(
-                              onLongPress: () => toggleSelectionMode(folder),
-                              onTap: () {
-                                if (selectionMode) {
-                                  toggleSelectionMode(folder);
-                                } else {
-                                  _openCloudFolder(context, folder);
-                                }
-                              },
-                              child: ListTile(
-                                leading: Icon(Icons.folder, size: 40, color: isSelected ? Colors.cyan : Colors.blue),
-                                title: Text(folder['name']),
-                                trailing: IconButton(
-                                  icon: Icon(
-                                    selectionMode
-                                        ? (isSelected ? Icons.check_circle : Icons.radio_button_unchecked)
-                                        : Icons.more_vert,
-                                    color: isSelected ? Colors.blue : null,
-                                  ),
-                                  onPressed: selectionMode
-                                      ? () => toggleSelectionMode(folder)
-                                      : () => _showOptions(context, folder),
-                                ),
+              onRefresh: _refreshPage, // Function to reload page
+              color: Colors.blue, // Set refresh indicator color
+              child: ListView(
+                controller: _scrollController,
+                children: [
+                  if (getPaginatedItems().isNotEmpty) ...[
+                    // Display Folders
+                    if (folders.isNotEmpty)
+                      ...getPaginatedItems()
+                          .where((item) => !item.containsKey('file_code'))
+                          .map((folder) {
+                        bool isSelected = selectedItems.contains(folder);
+                        return GestureDetector(
+                          onLongPress: () => toggleSelectionMode(folder),
+                          onTap: () {
+                            if (selectionMode) {
+                              toggleSelectionMode(folder);
+                            } else {
+                              _openCloudFolder(context, folder);
+                            }
+                          },
+                          child: ListTile(
+                            leading: Icon(Icons.folder, size: 40, color: isSelected ? Colors.cyan : Colors.blue),
+                            title: Text(folder['name']),
+                            trailing: IconButton(
+                              icon: Icon(
+                                selectionMode
+                                    ? (isSelected ? Icons.check_circle : Icons.radio_button_unchecked)
+                                    : Icons.more_vert,
+                                color: isSelected ? Colors.blue : null,
                               ),
-                            );
-                          }).toList(),
-
-                        // Display Files
-                        if (files.isNotEmpty)
-                          ...getPaginatedItems().where((item) => item.containsKey('file_code')).map((file) {
-                            bool isSelected = selectedItems.contains(file);
-                            return GestureDetector(
-                              onLongPress: () => toggleSelectionMode(file),
-                              onTap: () {
-                                if (selectionMode) {
-                                  toggleSelectionMode(file);
-                                } else {
-                                  openCloudFile(context, file['file_code'], file['name']);
-                                }
-                              },
-                              child: ListTile(
-                                leading: Stack(
-                                  children: [
-                                    Image.network(
-                                      file['thumbnail'], 
-                                      width: 40,
-                                      height: 40, 
-                                      fit: BoxFit.cover,
-                                      errorBuilder: (BuildContext context, Object error, StackTrace? stackTrace) {
-                                        // Get the appropriate icon based on the file type
-                                        return getFileIcon(file['name']);
-                                      },
-                                    ),
-                                    if (isSelected)
-                                      Positioned.fill(
-                                        child: Container(
-                                          color: Colors.blue.withOpacity(0.5),
-                                          child: Icon(Icons.check, color: Colors.white, size: 40),
-                                        ),
-                                      ),
-                                  ],
-                                ),
-                                title: Text(file['name']),
-                                trailing: IconButton(
-                                  icon: Icon(
-                                    selectionMode
-                                        ? (isSelected ? Icons.check_circle : Icons.radio_button_unchecked)
-                                        : Icons.more_vert,
-                                    color: isSelected ? Colors.blue : null,
-                                  ),
-                                  onPressed: selectionMode
-                                      ? () => toggleSelectionMode(file)
-                                      : () => _showOptions(context, file),
-                                ),
-                              ),
-                            );
-                          }).toList(),
-                      ] else ...[
-                        Center(
-                          child: Padding(
-                            padding: EdgeInsets.all(16.0),
-                            child: Text(
-                              "This folder is empty",
-                              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                              onPressed: selectionMode
+                                  ? () => toggleSelectionMode(folder)
+                                  : () => _showOptions(context, folder),
                             ),
+                          ),
+                        );
+                      }).toList(),
+
+                    // Display Files
+                    if (files.isNotEmpty)
+                      ...getPaginatedItems().where((item) => item.containsKey('file_code')).map((file) {
+                        bool isSelected = selectedItems.contains(file);
+                        return GestureDetector(
+                          onLongPress: () => toggleSelectionMode(file),
+                          onTap: () {
+                            if (selectionMode) {
+                              toggleSelectionMode(file);
+                            } else {
+                              openCloudFile(context, file['file_code'], file['name']);
+                            }
+                          },
+                          child: ListTile(
+                            leading: Stack(
+                              children: [
+                                Image.network(
+                                  file['thumbnail'],
+                                  width: 40,
+                                  height: 40,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (BuildContext context, Object error, StackTrace? stackTrace) {
+                                    // Get the appropriate icon based on the file type
+                                    return getFileIcon(file['name']);
+                                  },
+                                ),
+                                if (isSelected)
+                                  Positioned.fill(
+                                    child: Container(
+                                      color: Colors.blue.withOpacity(0.5),
+                                      child: Icon(Icons.check, color: Colors.white, size: 40),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                            title: Text(file['name']),
+                            trailing: IconButton(
+                              icon: Icon(
+                                selectionMode
+                                    ? (isSelected ? Icons.check_circle : Icons.radio_button_unchecked)
+                                    : Icons.more_vert,
+                                color: isSelected ? Colors.blue : null,
+                              ),
+                              onPressed: selectionMode
+                                  ? () => toggleSelectionMode(file)
+                                  : () => _showOptions(context, file),
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                  ] else ...[
+                    Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(16.0),
+                        child: Text(
+                          "This folder is empty",
+                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ),
+                  ],
+                  // Pagination Controls
+                  if (totalItems > itemsPerPage && itemsPerPage > 0) ...[
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        ElevatedButton(
+                          onPressed: currentPage > 0
+                              ? () {
+                                  setState(() {
+                                    currentPage--;
+                                  });
+                                }
+                              : null,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.blue, // Set background color to blue
+                          ), // Disable button while uploading
+                          child: Text(
+                            "Previous",
+                            style: TextStyle(color: Colors.white),
+                          ),
+                        ),
+                        ElevatedButton(
+                          onPressed: () => showGoToPageDialog(context),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.blue, // Set background color to blue
+                          ), // Disable button while uploading
+                          child: Text(
+                            "Page ${currentPage + 1} of ${(totalItems / itemsPerPage).ceil()}",
+                            style: TextStyle(color: Colors.white),
+                          ),
+                        ),
+                        ElevatedButton(
+                          onPressed: (currentPage + 1) * itemsPerPage < totalItems
+                              ? () {
+                                  setState(() {
+                                    currentPage++;
+                                  });
+                                }
+                              : null,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.blue, // Set background color to blue
+                          ), // Disable button while uploading
+                          child: Text(
+                            "Next",
+                            style: TextStyle(color: Colors.white),
                           ),
                         ),
                       ],
-                    ],
-                  ),
-                ),
-
-                // Pagination Controls
-                if (totalItems > itemsPerPage && itemsPerPage > 0) ...[
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      ElevatedButton(
-                        onPressed: currentPage > 0
-                            ? () {
-                                setState(() {
-                                  currentPage--;
-                                });
-                              }
-                            : null,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.blue, // Set background color to blue
-                        ), // Disable button while uploading
-                        child: Text(
-                          "Previous",
-                          style: TextStyle(color: Colors.white),
-                        ),
-                      ),
-                      ElevatedButton(
-                        onPressed: () => showGoToPageDialog(context),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.blue, // Set background color to blue
-                        ), // Disable button while uploading
-                        child: Text(
-                          "Page ${currentPage + 1} of ${(totalItems / itemsPerPage).ceil()}",
-                          style: TextStyle(color: Colors.white),
-                        ),
-                      ),
-                      ElevatedButton(
-                        onPressed: (currentPage + 1) * itemsPerPage < totalItems
-                            ? () {
-                                setState(() {
-                                  currentPage++;
-                                });
-                              }
-                            : null,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.blue, // Set background color to blue
-                        ), // Disable button while uploading
-                        child: Text(
-                          "Next",
-                          style: TextStyle(color: Colors.white),
-                        ),
-                      ),
-                    ],
-                  ),
-                  SizedBox(height: 16),
+                    ),
+                    SizedBox(height: 16),
+                  ],
                 ],
-              ],
+              ),
             ),
-          ),
     );
 
   }
@@ -2085,6 +2111,9 @@ class _SyncPageState extends State<SyncPage> {
   Isolate? _backgroundIsolate;
   bool isSyncing = false;
 
+  final ScrollController _scrollController = ScrollController();
+  bool _isPlusButtonVisible = true;
+
   _SyncPageState({required this.mainFeature});
 
   @override
@@ -2092,6 +2121,32 @@ class _SyncPageState extends State<SyncPage> {
     super.initState();
     _loadSyncOrders();
     _watchFileCDM();
+    _scrollController.addListener(_scrollListener);
+  }
+
+  void _scrollListener() {
+    if (_scrollController.position.userScrollDirection == ScrollDirection.reverse) {
+      // User is scrolling down, hide the FAB
+      if (_isPlusButtonVisible) {
+        setState(() {
+          _isPlusButtonVisible = false;
+        });
+      }
+    } else if (_scrollController.position.userScrollDirection == ScrollDirection.forward) {
+      // User is scrolling up, show the FAB
+      if (!_isPlusButtonVisible) {
+        setState(() {
+          _isPlusButtonVisible = true;
+        });
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _scrollController.removeListener(_scrollListener);
+    _scrollController.dispose();
+    super.dispose();
   }
 
   Future<void> _watchFileCDM() async {
@@ -2348,17 +2403,20 @@ class _SyncPageState extends State<SyncPage> {
         backgroundColor: Colors.white,
         title: Text('Sync Files & Folders')
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _showAddSyncOrderDialog,
-        backgroundColor: Colors.blue,
-        child: Icon(Icons.add, color: Colors.white),
-      ),
+      floatingActionButton: _isPlusButtonVisible
+        ? FloatingActionButton(
+            onPressed: _showAddSyncOrderDialog,
+            backgroundColor: Colors.blue,
+            child: Icon(Icons.add, color: Colors.white),
+          )
+        : Container(),
       body: isLoading
             ? Center(child: CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(Colors.blue)),) // Show loading indicator
             : Column(
         children: [
           Expanded(
             child: ListView.builder(
+              controller: _scrollController,
               itemCount: mainFeature.syncOrders.length,
               itemBuilder: (context, index) {
                 final order = mainFeature.syncOrders[index];
