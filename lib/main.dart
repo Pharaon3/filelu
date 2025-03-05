@@ -2467,20 +2467,52 @@ class _TransferState extends State<Transfer> {
 
   Widget _buildFileList(List<dynamic> queue, {required bool isUpload}) {
     return ListView.builder(
-      shrinkWrap: true, // Important to prevent infinite height error
+      shrinkWrap: true, // Prevents infinite height error
       physics: NeverScrollableScrollPhysics(), // Prevents nested scroll issues
       itemCount: queue.length,
       itemBuilder: (context, index) {
         var item = queue[index];
+        bool isRemoved = item['isRemoved'] ?? false;
+        bool isCompleted = (item['progress'] ?? 0.0) >= 1.0;
+        bool isDisabled = isRemoved || isCompleted;
         String fileName = isUpload ? _getFileName(item['filePath']) : item['fileName'];
 
-        return ListTile(
-          leading: Icon(isUpload ? Icons.upload : Icons.download, color: Colors.blue),
-          title: Text(fileName, style: TextStyle(fontSize: 16)),
-          subtitle: _buildProgressBar(item), // Placeholder for progress
+        return Opacity(
+          opacity: isDisabled ? 0.5 : 1.0, // Dim the row if removed
+          child: IgnorePointer(
+            ignoring: isDisabled, // Disable interaction if removed
+            child: ListTile(
+              leading: Icon(
+                isUpload ? Icons.upload : Icons.download,
+                color: isDisabled ? Colors.grey : Colors.blue, // Change color if removed
+              ),
+              title: Text(
+                fileName,
+                style: TextStyle(
+                  fontSize: 16,
+                  color: isDisabled ? Colors.grey : Colors.black, // Gray out text
+                ),
+              ),
+              subtitle: _buildProgressBar(item), // Displays progress
+              trailing: IconButton(
+                icon: Icon(Icons.close, color: isDisabled ? Colors.grey : Colors.red), // Gray out button
+                onPressed: isDisabled ? null : () => _cancelTransfer(index, isUpload),
+              ),
+            ),
+          ),
         );
       },
     );
+  }
+
+  void _cancelTransfer(int index, bool isUpload) {
+    setState(() {
+      if (isUpload) {
+        mainFeature.uploadQueue[index]['isRemoved'] = true;
+      } else {
+        mainFeature.downloadQueue[index]['isRemoved'] = true;
+      }
+    });
   }
 
   Widget _buildProgressBar(dynamic file) {
