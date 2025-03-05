@@ -642,227 +642,255 @@ class _MyFilesPageState extends State<MyFilesPage> {
       }
     }
 
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
+      return Scaffold(
         backgroundColor: Colors.white,
-        title: Text(selectionMode ? "${selectedItems.length} selected" : 'My Files'),
-        leading: IconButton(
-          icon: Icon(selectionMode ? Icons.close : Icons.arrow_back, color: Colors.blue,),
-          onPressed: () {
-            if (selectionMode) {
-              setState(() {
-                selectedItems.clear();
-              });
-            } else {
-              _backCloudFolder();
-            }
-          },
-        ),
-        actions: [
-          if (!selectionMode) ...[
-            IconButton(
-              icon: Icon(Icons.home, color: Colors.blue),
-              onPressed: () => _homeCloudFolder(),
-            ),
-            IconButton(
-              icon: Icon(Icons.more_vert),
-              onPressed: () => _showConfigMenu(),
-            ),
-          ] else ...[
-            IconButton(
-              icon: Icon(Icons.select_all, color: Colors.blue),
-              onPressed: () {
+        appBar: AppBar(
+          backgroundColor: Colors.white,
+          title: Text(selectionMode ? "${selectedItems.length} selected" : 'My Files'),
+          leading: IconButton(
+            icon: Icon(selectionMode ? Icons.close : Icons.arrow_back, color: Colors.blue),
+            onPressed: () {
+              if (selectionMode) {
                 setState(() {
-                  if (selectedItems.length == totalItems) {
-                    selectedItems.clear();
+                  selectedItems.clear();
+                });
+              } else {
+                _backCloudFolder();
+              }
+            },
+          ),
+          actions: [
+            if (!selectionMode) ...[
+              IconButton(
+                icon: Icon(Icons.home, color: Colors.blue),
+                onPressed: () => _homeCloudFolder(),
+              ),
+              IconButton(
+                icon: Icon(Icons.more_vert),
+                onPressed: () => _showConfigMenu(),
+              ),
+            ] else ...[
+              IconButton(
+                icon: Icon(Icons.select_all, color: Colors.blue),
+                onPressed: () {
+                  setState(() {
+                    if (selectedItems.length == totalItems) {
+                      selectedItems.clear();
+                      selectionMode = false;
+                    } else {
+                      selectedItems = List.from([...folders, ...files]);
+                      selectionMode = true;
+                    }
+                  });
+                },
+              ),
+              IconButton(
+                icon: Icon(Icons.more_vert),
+                onPressed: () {
+                  setState(() {
                     selectionMode = false;
-                  } else {
-                    selectedItems = List.from([...folders, ...files]);
-                    selectionMode = true;
-                  }
-                });
-              },
-            ),
-            IconButton(
-              icon: Icon(Icons.more_vert),
-              onPressed: () {
-                setState(() {
-                  selectionMode = false;
-                });
-                _showOptions(context, "");
-              },
+                  });
+                  _showOptions(context, "");
+                },
+              ),
+            ],
+          ],
+        ),
+        floatingActionButton: Stack(
+          children: [
+            if (copyStatus != 0)
+              Positioned(
+                right: 16,
+                bottom: 16,
+                child: FloatingActionButton(
+                  onPressed: _pasteFile,
+                  child: Icon(Icons.paste, color: Colors.blue),
+                ),
+              ),
+            Positioned(
+              left: 16,
+              bottom: 16,
+              child: Padding(
+                padding: const EdgeInsets.only(left: 12.0), // Add padding for more space on the left
+                child: Material(
+                  elevation: 8.0, // Increased elevation for a stronger shadow effect
+                  shadowColor: Colors.black.withOpacity(0.5), // Darker shadow color
+                  shape: CircleBorder(), // Maintain circular shape for the FAB
+                  child: FloatingActionButton(
+                    onPressed: () {
+                      // Action for the "+" button
+                      print("Add new item action");
+                      // You can navigate or show a dialog to add a new file/folder, for example
+                    },
+                    child: Icon(Icons.add, color: Colors.white),
+                    backgroundColor: Colors.blue,
+                  ),
+                ),
+              ),
             ),
           ],
-        ],
-      ),
-      floatingActionButton: copyStatus != 0
-          ? FloatingActionButton(
-              onPressed: _pasteFile,
-              child: Icon(Icons.paste, color: Colors.blue),
-            )
-          : null,
-      body: isLoading
-          ? Center(child: CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(Colors.blue)))
-          : Column(
-              children: [
-                Expanded(
-                  child: ListView(
-                    children: [
-                      if (getPaginatedItems().isNotEmpty) ...[
-                        // Display Folders
-                        if (folders.isNotEmpty)
-                          ...getPaginatedItems()
-                              .where((item) => !item.containsKey('file_code'))
-                              .map((folder) {
-                            bool isSelected = selectedItems.contains(folder);
-                            return GestureDetector(
-                              onLongPress: () => toggleSelectionMode(folder),
-                              onTap: () {
-                                if (selectionMode) {
-                                  toggleSelectionMode(folder);
-                                } else {
-                                  _openCloudFolder(context, folder);
-                                }
-                              },
-                              child: ListTile(
-                                leading: Icon(Icons.folder, size: 40, color: isSelected ? Colors.cyan : Colors.blue),
-                                title: Text(folder['name']),
-                                trailing: IconButton(
-                                  icon: Icon(
-                                    selectionMode
-                                        ? (isSelected ? Icons.check_circle : Icons.radio_button_unchecked)
-                                        : Icons.more_vert,
-                                    color: isSelected ? Colors.blue : null,
-                                  ),
-                                  onPressed: selectionMode
-                                      ? () => toggleSelectionMode(folder)
-                                      : () => _showOptions(context, folder),
-                                ),
-                              ),
-                            );
-                          }).toList(),
-
-                        // Display Files
-                        if (files.isNotEmpty)
-                          ...getPaginatedItems().where((item) => item.containsKey('file_code')).map((file) {
-                            bool isSelected = selectedItems.contains(file);
-                            return GestureDetector(
-                              onLongPress: () => toggleSelectionMode(file),
-                              onTap: () {
-                                if (selectionMode) {
-                                  toggleSelectionMode(file);
-                                } else {
-                                  openCloudFile(context, file['file_code'], file['name']);
-                                }
-                              },
-                              child: ListTile(
-                                leading: Stack(
-                                  children: [
-                                    Image.network(
-                                      file['thumbnail'], 
-                                      width: 40,
-                                      height: 40, 
-                                      fit: BoxFit.cover,
-                                      errorBuilder: (BuildContext context, Object error, StackTrace? stackTrace) {
-                                        // Get the appropriate icon based on the file type
-                                        return getFileIcon(file['name']);
-                                      },
+        ),
+        body: isLoading
+            ? Center(child: CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(Colors.blue)))
+            : Column(
+                children: [
+                  Expanded(
+                    child: ListView(
+                      children: [
+                        if (getPaginatedItems().isNotEmpty) ...[
+                          // Display Folders
+                          if (folders.isNotEmpty)
+                            ...getPaginatedItems()
+                                .where((item) => !item.containsKey('file_code'))
+                                .map((folder) {
+                              bool isSelected = selectedItems.contains(folder);
+                              return GestureDetector(
+                                onLongPress: () => toggleSelectionMode(folder),
+                                onTap: () {
+                                  if (selectionMode) {
+                                    toggleSelectionMode(folder);
+                                  } else {
+                                    _openCloudFolder(context, folder);
+                                  }
+                                },
+                                child: ListTile(
+                                  leading: Icon(Icons.folder, size: 40, color: isSelected ? Colors.cyan : Colors.blue),
+                                  title: Text(folder['name']),
+                                  trailing: IconButton(
+                                    icon: Icon(
+                                      selectionMode
+                                          ? (isSelected ? Icons.check_circle : Icons.radio_button_unchecked)
+                                          : Icons.more_vert,
+                                      color: isSelected ? Colors.blue : null,
                                     ),
-                                    if (isSelected)
-                                      Positioned.fill(
-                                        child: Container(
-                                          color: Colors.blue.withOpacity(0.5),
-                                          child: Icon(Icons.check, color: Colors.white, size: 40),
-                                        ),
-                                      ),
-                                  ],
-                                ),
-                                title: Text(file['name']),
-                                trailing: IconButton(
-                                  icon: Icon(
-                                    selectionMode
-                                        ? (isSelected ? Icons.check_circle : Icons.radio_button_unchecked)
-                                        : Icons.more_vert,
-                                    color: isSelected ? Colors.blue : null,
+                                    onPressed: selectionMode
+                                        ? () => toggleSelectionMode(folder)
+                                        : () => _showOptions(context, folder),
                                   ),
-                                  onPressed: selectionMode
-                                      ? () => toggleSelectionMode(file)
-                                      : () => _showOptions(context, file),
                                 ),
+                              );
+                            }).toList(),
+
+                          // Display Files
+                          if (files.isNotEmpty)
+                            ...getPaginatedItems().where((item) => item.containsKey('file_code')).map((file) {
+                              bool isSelected = selectedItems.contains(file);
+                              return GestureDetector(
+                                onLongPress: () => toggleSelectionMode(file),
+                                onTap: () {
+                                  if (selectionMode) {
+                                    toggleSelectionMode(file);
+                                  } else {
+                                    openCloudFile(context, file['file_code'], file['name']);
+                                  }
+                                },
+                                child: ListTile(
+                                  leading: Stack(
+                                    children: [
+                                      Image.network(
+                                        file['thumbnail'], 
+                                        width: 40,
+                                        height: 40, 
+                                        fit: BoxFit.cover,
+                                        errorBuilder: (BuildContext context, Object error, StackTrace? stackTrace) {
+                                          // Get the appropriate icon based on the file type
+                                          return getFileIcon(file['name']);
+                                        },
+                                      ),
+                                      if (isSelected)
+                                        Positioned.fill(
+                                          child: Container(
+                                            color: Colors.blue.withOpacity(0.5),
+                                            child: Icon(Icons.check, color: Colors.white, size: 40),
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                  title: Text(file['name']),
+                                  trailing: IconButton(
+                                    icon: Icon(
+                                      selectionMode
+                                          ? (isSelected ? Icons.check_circle : Icons.radio_button_unchecked)
+                                          : Icons.more_vert,
+                                      color: isSelected ? Colors.blue : null,
+                                    ),
+                                    onPressed: selectionMode
+                                        ? () => toggleSelectionMode(file)
+                                        : () => _showOptions(context, file),
+                                  ),
+                                ),
+                              );
+                            }).toList(),
+                        ] else ...[
+                          Center(
+                            child: Padding(
+                              padding: EdgeInsets.all(16.0),
+                              child: Text(
+                                "This folder is empty",
+                                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                               ),
-                            );
-                          }).toList(),
-                      ] else ...[
-                        Center(
-                          child: Padding(
-                            padding: EdgeInsets.all(16.0),
-                            child: Text(
-                              "This folder is empty",
-                              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                             ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+
+                  // Pagination Controls
+                  if (totalItems > itemsPerPage && itemsPerPage > 0) ...[
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        ElevatedButton(
+                          onPressed: currentPage > 0
+                              ? () {
+                                  setState(() {
+                                    currentPage--;
+                                  });
+                                }
+                              : null,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.blue, // Set background color to blue
+                          ), // Disable button while uploading
+                          child: Text(
+                            "Previous",
+                            style: TextStyle(color: Colors.white),
+                          ),
+                        ),
+                        ElevatedButton(
+                          onPressed: () => showGoToPageDialog(context),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.blue, // Set background color to blue
+                          ), // Disable button while uploading
+                          child: Text(
+                            "Page ${currentPage + 1} of ${(totalItems / itemsPerPage).ceil()}",
+                            style: TextStyle(color: Colors.white),
+                          ),
+                        ),
+                        ElevatedButton(
+                          onPressed: (currentPage + 1) * itemsPerPage < totalItems
+                              ? () {
+                                  setState(() {
+                                    currentPage++;
+                                  });
+                                }
+                              : null,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.blue, // Set background color to blue
+                          ), // Disable button while uploading
+                          child: Text(
+                            "Next",
+                            style: TextStyle(color: Colors.white),
                           ),
                         ),
                       ],
-                    ],
-                  ),
-                ),
-
-                // Pagination Controls
-                if (totalItems > itemsPerPage && itemsPerPage > 0) ...[
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      ElevatedButton(
-                        onPressed: currentPage > 0
-                            ? () {
-                                setState(() {
-                                  currentPage--;
-                                });
-                              }
-                            : null,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.blue, // Set background color to blue
-                        ), // Disable button while uploading
-                        child: Text(
-                          "Previous",
-                          style: TextStyle(color: Colors.white),
-                        ),
-                      ),
-                      ElevatedButton(
-                        onPressed: () => showGoToPageDialog(context),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.blue, // Set background color to blue
-                        ), // Disable button while uploading
-                        child: Text(
-                          "Page ${currentPage + 1} of ${(totalItems / itemsPerPage).ceil()}",
-                          style: TextStyle(color: Colors.white),
-                        ),
-                      ),
-                      ElevatedButton(
-                        onPressed: (currentPage + 1) * itemsPerPage < totalItems
-                            ? () {
-                                setState(() {
-                                  currentPage++;
-                                });
-                              }
-                            : null,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.blue, // Set background color to blue
-                        ), // Disable button while uploading
-                        child: Text(
-                          "Next",
-                          style: TextStyle(color: Colors.white),
-                        ),
-                      ),
-                    ],
-                  ),
-                  SizedBox(height: 16),
+                    ),
+                    SizedBox(height: 16),
+                  ],
                 ],
-              ],
-            ),
-    );
-  
+              ),
+      );
+
   }
 
   // Show options (Rename, Copy, Move To, Download, Remove) for file/folder
@@ -1604,104 +1632,6 @@ class _MyFilesPageState extends State<MyFilesPage> {
       MaterialPageRoute(builder: (context) => LoginPage()),
       (Route<dynamic> route) => false, // Removes all previous routes
     );
-  }
-
-  void _startBackup() async {
-    String cameraFolderID = await mainFeature.getFolderID("Camera", "0");
-      if (cameraFolderID == "") {
-        cameraFolderID = await mainFeature.createCloudFolder("Camera", "0");
-      }
-    _uploadCameraFolder(cameraFolderID);
-    if (_backgroundIsolate != null) return;
-    ReceivePort newReceivePort = ReceivePort();
-    _backgroundIsolate = await Isolate.spawn(_fileWatcher, newReceivePort.sendPort);
-    newReceivePort.listen((message) async {
-      String detectedFilePath = message as String;
-      // await Future.delayed(Duration(seconds: 3));
-      mainFeature.addUploadQueue({
-        "filePath": detectedFilePath,
-        "folderID": cameraFolderID,
-      });
-    });
-    print("✅ Background Sync Started!");
-  }
-
-  Future<bool> _requestStoragePermission() async {
-    if (Platform.isAndroid) {
-      // Android storage permission
-      if (await Permission.storage.request().isGranted) {
-        return true;
-      }
-      if (await Permission.manageExternalStorage.request().isGranted) {
-        return true;
-      }
-    } else if (Platform.isIOS) {
-      // iOS photo library permission
-      if (await Permission.photos.request().isGranted) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  Future<void> _uploadCameraFolder(String cameraFolderID) async {
-    bool hasPermission = await _requestStoragePermission();
-    if (!hasPermission) {
-      print("❌ Storage permission denied");
-      return;
-    }
-    List<String> cloudFiles = [];
-    final response = await http.get(
-      Uri.parse('$baseURL/folder/list?fld_id=$cameraFolderID&sess_id=${mainFeature.sessionId}'),
-    );
-
-    if (response.statusCode == 200) {
-      var data = jsonDecode(response.body);
-      cloudFiles = List<String>.from(data['result']['files'].map((file) => file['name']));
-    }
-
-    List<FileSystemEntity> mediaFiles = [];
-
-    if (Platform.isAndroid) {
-      // For Android: Accessing the DCIM/Camera folder
-      const String directoryPath = "/storage/emulated/0/DCIM/Camera";
-      final directory = Directory(directoryPath);
-      if (directory.existsSync()) {
-        mediaFiles = directory.listSync().where(
-          (file) {
-            if (file is File) {
-              final ext = file.path.split('.').last.toLowerCase();
-              return ["jpg", "jpeg", "png", "mp4", "mov"].contains(ext);
-            }
-            return false;
-          },
-        ).toList();
-      }
-    } else if (Platform.isIOS) {
-    }
-
-    if (fromToday) {
-      final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
-      mediaFiles = mediaFiles.where((file) {
-        return FileStat.statSync(file.path).modified.isAfter(DateTime.parse(today));
-      }).toList();
-    }
-
-    for (var file in mediaFiles) {
-      if (!cloudFiles.contains(file.path.split('/').last.split(r'\').last)) {
-        String cameraFolderID = await mainFeature.getFolderID("Camera", "0");
-        if (cameraFolderID == "") {
-          cameraFolderID = await mainFeature.createCloudFolder("Camera", "0");
-        }
-        mainFeature.addUploadQueue({
-          "filePath": file.path,
-          'folderID': cameraFolderID
-        });
-        lastBackupDate = DateTime.now();
-        _saveSetting("last_backup_date", lastBackupDate);
-      }
-    }
-    print("Backup completed: ${mediaFiles.length} files uploaded");
   }
 
   void _stopBackgroundSync() {
