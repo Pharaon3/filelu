@@ -14,6 +14,7 @@ import 'package:intl/intl.dart';
 import 'dart:isolate';
 import 'dart:async';
 
+Map<int, http.StreamedResponse?> activeDownloads = {}; // Stores active requests
 const String baseURL = "https://filelu.com/api";
 
 void main() {
@@ -2681,22 +2682,16 @@ class MainFeature {
   Future<void> _infinitCycling() async {
     for(int i = 0; i < 5; i ++) {
       if (uploadQueue.isNotEmpty && uploadQueue.length > currentUploadingItemIndex) {
-        String fileCode = await uploadFile(
-          uploadQueue[currentUploadingItemIndex]['filePath'], 
-          uploadQueue[currentUploadingItemIndex]['folderID'],
+        uploadFile(
+          currentUploadingItemIndex,
           (progress) {
             uploadQueue[currentUploadingItemIndex]['progress'] = progress;
           }
           );
-        uploadQueue[currentUploadingItemIndex]['progress'] = 1.0;
-        uploadQueue[currentUploadingItemIndex]['fileCode'] = fileCode;
         currentUploadingItemIndex ++;
       }
       if (downloadQueue.isNotEmpty && downloadQueue.length > currentDownloadingItemIndex) {
-        downloadFile(downloadQueue[currentDownloadingItemIndex]['fileCode'], 
-                          downloadQueue[currentDownloadingItemIndex]['fileName'],
-                          downloadQueue[currentDownloadingItemIndex]['filePath']);
-        // downloadQueue[currentDownloadingItemIndex]['progress'] = 1.0;
+        downloadFile(currentDownloadingItemIndex);
         currentDownloadingItemIndex ++;
       }
     }
@@ -2745,17 +2740,20 @@ class MainFeature {
   }
 
   Future<String> uploadFile(
-    String filePath, String folderID, Function(double) onProgress) async {
-
+    int index, Function(double) onProgress) async {
+    String filePath = uploadQueue[index]['filePath'];
+    String folderID = uploadQueue[index]['folderID'];
     if (serverUrl.isEmpty) {
       print("No available upload server. Upload failed.");
-      return "";
+      uploadQueue[index]['isRemoved'] = true;
+      return "no server";
     }
 
     File file = File(filePath);
     if (!await file.exists()) {
       print("File does not exist: $filePath");
-      return "";
+      uploadQueue[index]['isRemoved'] = true;
+      return "no file";
     }
     int fileSize = await file.length();
     print("Uploading file of size: $fileSize bytes");
@@ -2771,7 +2769,10 @@ class MainFeature {
       cloudFiles = List<String>.from(data['result']['files'].map((file) => file['name']));
     }
 
-    if (cloudFiles.contains(filePath.split('/').last)) return "";
+    if (cloudFiles.contains(filePath.split('/').last)) {
+      uploadQueue[index]['isRemoved'] = true;
+      return "already exists";
+    }
 
     try {
       var request = http.MultipartRequest('POST', Uri.parse(serverUrl));
@@ -2820,7 +2821,7 @@ class MainFeature {
     } catch (e) {
       print("Upload error: $e");
     }
-    return "";
+    return "went wrong";
   }
 
   Future<void> uploadFolder(String localPath, String folderID) async {
@@ -2948,9 +2949,13 @@ class MainFeature {
     }
   }
 
-  Future<void> downloadFile(String fileCode, String fileName, String filePath) async {
-    String parentDirectory = await getDownloadDirectory();
-    String saveDirectory = "$parentDirectory/$filePath";
+  Future<void> downloadFile(int index) async {
+    String fileCode = downloadQueue[index]['fileCode'];
+    String fileName = downloadQueue[index]['fileName'];
+    String filePath = downloadQueue[index]['filePath'];
+    // String parentDirectory = await getDownloadDirectory();
+    // String saveDirectory = "$parentDirectory/$filePath";
+    String saveDirectory = filePath;
 
     try {
       String downloadLink = await _getDownloadLink(fileCode);
@@ -2959,12 +2964,17 @@ class MainFeature {
         var status = await Permission.storage.request();
         if (!status.isGranted) {
           print("Storage permission denied");
+          downloadQueue[index]['isRemoved'] = true;
           return;
         }
       }
 
       var request = http.Request('GET', Uri.parse(downloadLink));
       var streamedResponse = await http.Client().send(request);
+
+      // Store the request in activeDownloads so it can be canceled later
+      activeDownloads[index] = streamedResponse;
+
       int totalBytes = streamedResponse.contentLength ?? 0;
       int receivedBytes = 0;
 
@@ -2978,40 +2988,45 @@ class MainFeature {
 
         var sink = file.openWrite();
         await for (var chunk in streamedResponse.stream) {
+          // Check if canceled
+          if (downloadQueue[index]['isRemoved'] == true) {
+            print("Download canceled: $fileName");
+            streamedResponse.stream.listen(null).cancel(); // Cancel stream
+            await sink.close();
+            file.deleteSync(); // Delete incomplete file
+            return;
+          }
+
           receivedBytes += chunk.length;
           sink.add(chunk);
 
-          // Calculate progress
+          // Update progress
           double progress = totalBytes > 0 ? receivedBytes / totalBytes : 0.0;
-          
-          // Update progress in downloadQueue
-          int index = downloadQueue.indexWhere((file) => file['fileCode'] == fileCode);
-          if (index != -1) {
-            downloadQueue[index]['progress'] = progress;
-          }
-
-          // Print progress (optional)
-          print("Downloading: ${(progress * 100).toStringAsFixed(1)}%");
+          downloadQueue[index]['progress'] = progress;
         }
         await sink.close();
 
         print("Download complete! File saved at: $filePath");
 
         // Mark as completed
-        int index = downloadQueue.indexWhere((file) => file['fileCode'] == fileCode);
-        if (index != -1) {
-          downloadQueue[index]['progress'] = 1.0;
-        }
+        downloadQueue[index]['progress'] = 1.0;
       } else {
         print("Download failed. Server response: ${streamedResponse.statusCode}");
       }
     } catch (e) {
       print("Error downloading file: $e");
+    } finally {
+      activeDownloads.remove(index); // Remove from active downloads after completion
     }
   }
 
   Future<void> downloadFolder(String folderID, String folderPath) async {
+    List<String> localFiles = [];
     await createFolderIfNotExists(folderPath);
+    Directory dir = Directory(folderPath);
+    if (dir.existsSync()) {
+      localFiles = dir.listSync().whereType<File>().map((e) => e.path.split(Platform.pathSeparator).last).toList();
+    }
     dynamic fileFolders = await fetchFilesAndFolders(folderID);
     if (fileFolders.containsKey('folders')) {
       dynamic folders = fileFolders['folders'];
@@ -3022,11 +3037,13 @@ class MainFeature {
     if (fileFolders.containsKey('files')) {
       dynamic files = fileFolders['files'];
       for (dynamic file in files) {
-        addDownloadingQueue({
-          "fileCode": file['file_code'], 
-          "fileName": file['name'], 
-          "filePath": folderPath
-        });
+        if (!localFiles.contains(file['name'])) {
+          addDownloadingQueue({
+            "fileCode": file['file_code'], 
+            "fileName": file['name'], 
+            "filePath": folderPath
+          });
+        }
       }
     }
   }
