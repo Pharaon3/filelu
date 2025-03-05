@@ -104,6 +104,18 @@ class MyApp extends StatelessWidget {
           selectionColor: Colors.blue.withOpacity(0.5), // Selection background color
           selectionHandleColor: Colors.blue, // Handle color
         ),
+        textButtonTheme: TextButtonThemeData(
+          style: TextButton.styleFrom(foregroundColor: Colors.blue), // Blue text for all TextButton
+        ),
+        inputDecorationTheme: InputDecorationTheme(
+          hintStyle: TextStyle(color: Colors.black),  // Customize hint text color
+          focusedBorder: UnderlineInputBorder(
+            borderSide: BorderSide(color: Colors.blue, width: 2.0),  // Blue bottom line on focus
+          ),
+          enabledBorder: UnderlineInputBorder(
+            borderSide: BorderSide(color: Colors.grey, width: 1.0),  // Grey bottom line when not focused
+          ),
+        ),
       ),
       home: FutureBuilder<String?>(
         future: getSessionId(),
