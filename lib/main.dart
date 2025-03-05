@@ -704,31 +704,27 @@ class _MyFilesPageState extends State<MyFilesPage> {
       ),
       floatingActionButton: Stack(
         children: [
-          if (copyStatus != 0)
             Positioned(
-              right: 16,
-              bottom: 16,
-              child: FloatingActionButton(
-                onPressed: _pasteFile,
-                child: Icon(Icons.paste, color: Colors.blue),
+              child: Material(
+                shape: CircleBorder(), // Maintain circular shape for the FAB
+                child: FloatingActionButton(
+                  onPressed: () {
+                    _showAddOptionsDialog(context);
+                  },
+                  backgroundColor: Colors.blue,
+                  child: Icon(Icons.add, color: Colors.white),
+                ),
               ),
             ),
+          if (copyStatus != 0)
           Positioned(
             left: 16,
             bottom: 16,
             child: Padding(
               padding: const EdgeInsets.only(left: 12.0), // Add padding for more space on the left
-              child: Material(
-                elevation: 8.0, // Increased elevation for a stronger shadow effect
-                shadowColor: Colors.black.withOpacity(0.5), // Darker shadow color
-                shape: CircleBorder(), // Maintain circular shape for the FAB
-                child: FloatingActionButton(
-                  onPressed: () {
-                    _pickFiles();
-                  },
-                  backgroundColor: Colors.blue,
-                  child: Icon(Icons.add, color: Colors.white),
-                ),
+              child: FloatingActionButton(
+                onPressed: _pasteFile,
+                child: Icon(Icons.paste, color: Colors.blue),
               ),
             ),
           ),
@@ -1681,6 +1677,132 @@ class _MyFilesPageState extends State<MyFilesPage> {
     } else {
       return null;
     }
+  }
+
+  void _showAddOptionsDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text("Choose an action"),
+          content: SingleChildScrollView(
+            child: ListBody(
+              children: <Widget>[
+                ListTile(
+                  leading: Icon(Icons.create_new_folder, color: Colors.blue),
+                  title: Text("Create Folder"),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _createQuickNoteDialog(context);
+                  },
+                ),
+                ListTile(
+                  leading: Icon(Icons.note_add, color: Colors.blue),
+                  title: Text("Create Quick Note"),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _createQuickNoteDialog(context);
+                  },
+                ),
+                ListTile(
+                  leading: Icon(Icons.upload_file, color: Colors.blue),
+                  title: Text("Upload Files"),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _pickFiles();
+                  },
+                ),
+                ListTile(
+                  leading: Icon(Icons.folder_open, color: Colors.blue),
+                  title: Text("Select Folder"),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _selectFolder();
+                  },
+                ),
+                ListTile(
+                  leading: Icon(Icons.photo_library, color: Colors.blue),
+                  title: Text("Upload Media"),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _selectMedia();
+                  },
+                ),
+              ],
+            ),
+          ),
+          actions: <Widget>[
+            TextButton(
+              child: Text("Cancel", style: TextStyle(color: Colors.red)),
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _createQuickNoteDialog(BuildContext context) {
+    TextEditingController noteController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text("Create Quick Note"),
+          content: TextField(
+            controller: noteController,
+            maxLines: 5,
+            decoration: InputDecoration(hintText: "Enter your note"),
+          ),
+          actions: <Widget>[
+            TextButton(
+              child: Text("Cancel"),
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+            ),
+            TextButton(
+              child: Text("Save & Upload"),
+              onPressed: () {
+                String noteText = noteController.text.trim();
+                if (noteText.isNotEmpty) {
+                  _uploadNoteAsFile(noteText); // Function to save note
+                  Navigator.of(context).pop();
+                }
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _createFolder(BuildContext context) {
+    // print("Folder created: $folderName");
+    // Implement folder creation logic
+  }
+
+  void _uploadNoteAsFile(String note) {
+    print("Note uploaded: $note");
+    // Convert note into a file and upload
+  }
+
+  void _selectFolder() {
+    print("Selecting folder...");
+    // Implement folder selection logic
+  }
+
+  void _selectMedia() {
+    print("Selecting media...");
+    // Implement media selection logic (photos & videos)
+  }
+
+  void _captureMedia() {
+    print("Capturing photo or video...");
+    // Implement capture media logic (take photo/record video)
   }
 
   @override
