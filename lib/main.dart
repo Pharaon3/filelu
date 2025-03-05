@@ -1720,14 +1720,6 @@ class _MyFilesPageState extends State<MyFilesPage> {
                     _selectFolder();
                   },
                 ),
-                ListTile(
-                  leading: Icon(Icons.photo_library, color: Colors.blue),
-                  title: Text("Upload Media"),
-                  onTap: () {
-                    Navigator.pop(context);
-                    _selectMedia();
-                  },
-                ),
               ],
             ),
           ),
@@ -1895,9 +1887,42 @@ class _MyFilesPageState extends State<MyFilesPage> {
     }
   }
 
-  void _selectFolder() {
-    print("Selecting folder...");
-    // Implement folder selection logic
+  Future<void> _selectFolder() async {
+    try {
+      String? selectedDirectory = await FilePicker.platform.getDirectoryPath();
+      if (selectedDirectory != null) {
+        print("Selected Folder: $selectedDirectory");
+
+        // List all files inside the selected folder
+        final directory = Directory(selectedDirectory);
+
+        String folderID = "";
+        for(int i = 0; i < folders.length; i ++) {
+          if(folders[i]['name'] == selectedDirectory.split('/').last.split(r'\').last) {
+            folderID = folders[i]['folder_id'];
+          }
+        }
+        if (folderID == "") {
+          folderID = await mainFeature.createCloudFolder(selectedDirectory.split('/').last.split(r'\').last, visitedFolderIDs.last.first.toString());
+        }
+        final files = directory.listSync(recursive: false)
+            .whereType<File>() // Filter out only files, not subdirectories
+            .map((file) => file.path)
+            .toList();
+
+        for (String filePath in files) {
+          mainFeature.addUploadQueue({
+            "filePath": filePath,
+            "folderID": folderID
+          });
+        }
+        print("All files in the folder added to upload queue.");
+      } else {
+        print("Folder selection canceled.");
+      }
+    } catch (e) {
+      print("Error selecting folder: $e");
+    }
   }
 
   void _selectMedia() {
