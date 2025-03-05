@@ -2432,22 +2432,26 @@ class _TransferState extends State<Transfer> {
         backgroundColor: Colors.white,
         title: Text('File Transfers', style: TextStyle(color: Colors.black)),
       ),
-      body: Column(
-        children: [
-          if (mainFeature.uploadQueue.isNotEmpty) ...[
-            _buildSectionTitle("Uploads"),
-            _buildFileList(mainFeature.uploadQueue, isUpload: true),
-          ],
-          if (mainFeature.downloadQueue.isNotEmpty) ...[
-            _buildSectionTitle("Downloads"),
-            _buildFileList(mainFeature.downloadQueue, isUpload: false),
-          ],
-          if (mainFeature.uploadQueue.isEmpty && mainFeature.downloadQueue.isEmpty)
-            Expanded(
-              child: Center(child: Text("No active transfers")),
+      body: mainFeature.uploadQueue.isEmpty && mainFeature.downloadQueue.isEmpty
+          ? Center(child: Text("No active transfers"))
+          : Padding(
+              padding: const EdgeInsets.all(10.0),
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (mainFeature.uploadQueue.isNotEmpty) ...[
+                      _buildSectionTitle("Uploads"),
+                      _buildFileList(mainFeature.uploadQueue, isUpload: true),
+                    ],
+                    if (mainFeature.downloadQueue.isNotEmpty) ...[
+                      _buildSectionTitle("Downloads"),
+                      _buildFileList(mainFeature.downloadQueue, isUpload: false),
+                    ],
+                  ],
+                ),
+              ),
             ),
-        ],
-      ),
     );
   }
 
@@ -2462,20 +2466,20 @@ class _TransferState extends State<Transfer> {
   }
 
   Widget _buildFileList(List<dynamic> queue, {required bool isUpload}) {
-    return Expanded(
-      child: ListView.builder(
-        itemCount: queue.length,
-        itemBuilder: (context, index) {
-          var item = queue[index];
-          String fileName = isUpload ? _getFileName(item['filePath']) : item['fileName'];
-          
-          return ListTile(
-            leading: Icon(isUpload ? Icons.upload : Icons.download, color: Colors.blue),
-            title: Text(fileName, style: TextStyle(fontSize: 16)),
-            subtitle: _buildProgressBar(item), // Placeholder for progress
-          );
-        },
-      ),
+    return ListView.builder(
+      shrinkWrap: true, // Important to prevent infinite height error
+      physics: NeverScrollableScrollPhysics(), // Prevents nested scroll issues
+      itemCount: queue.length,
+      itemBuilder: (context, index) {
+        var item = queue[index];
+        String fileName = isUpload ? _getFileName(item['filePath']) : item['fileName'];
+
+        return ListTile(
+          leading: Icon(isUpload ? Icons.upload : Icons.download, color: Colors.blue),
+          title: Text(fileName, style: TextStyle(fontSize: 16)),
+          subtitle: _buildProgressBar(item), // Placeholder for progress
+        );
+      },
     );
   }
 
@@ -2484,12 +2488,21 @@ class _TransferState extends State<Transfer> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        LinearProgressIndicator(value: progress, minHeight: 5),
+        LinearProgressIndicator(
+          value: progress,
+          minHeight: 5,
+          backgroundColor: Colors.grey[300], // Light grey background
+          valueColor: AlwaysStoppedAnimation<Color>(Colors.blue), // Set progress color to blue
+        ),
         SizedBox(height: 5),
-        Text("${(progress * 100).toStringAsFixed(1)}%"),
+        Text(
+          "${(progress * 100).toStringAsFixed(1)}%",
+          style: TextStyle(color: Colors.blue), // Make text blue as well (optional)
+        ),
       ],
     );
   }
+
 }
 
 class VideoPlayerScreen extends StatefulWidget {
@@ -2648,10 +2661,10 @@ class MainFeature {
         currentUploadingItemIndex ++;
       }
       if (downloadQueue.isNotEmpty && downloadQueue.length > currentDownloadingItemIndex) {
-        await downloadFile(downloadQueue[currentDownloadingItemIndex]['fileCode'], 
+        downloadFile(downloadQueue[currentDownloadingItemIndex]['fileCode'], 
                           downloadQueue[currentDownloadingItemIndex]['fileName'],
                           downloadQueue[currentDownloadingItemIndex]['filePath']);
-        downloadQueue[currentDownloadingItemIndex]['progress'] = 1.0;
+        // downloadQueue[currentDownloadingItemIndex]['progress'] = 1.0;
         currentDownloadingItemIndex ++;
       }
     }
@@ -2906,9 +2919,10 @@ class MainFeature {
   Future<void> downloadFile(String fileCode, String fileName, String filePath) async {
     String parentDirectory = await getDownloadDirectory();
     String saveDirectory = "$parentDirectory/$filePath";
-    
+
     try {
       String downloadLink = await _getDownloadLink(fileCode);
+
       if (Platform.isAndroid) {
         var status = await Permission.storage.request();
         if (!status.isGranted) {
@@ -2916,17 +2930,48 @@ class MainFeature {
           return;
         }
       }
-      final response = await http.get(Uri.parse(downloadLink));
-      if (response.statusCode == 200) {
+
+      var request = http.Request('GET', Uri.parse(downloadLink));
+      var streamedResponse = await http.Client().send(request);
+      int totalBytes = streamedResponse.contentLength ?? 0;
+      int receivedBytes = 0;
+
+      if (streamedResponse.statusCode == 200) {
         String filePath = '$saveDirectory/$fileName';
         File file = File(filePath);
+
         if (!await file.parent.exists()) {
           await file.parent.create(recursive: true);
         }
-        await file.writeAsBytes(response.bodyBytes);
+
+        var sink = file.openWrite();
+        await for (var chunk in streamedResponse.stream) {
+          receivedBytes += chunk.length;
+          sink.add(chunk);
+
+          // Calculate progress
+          double progress = totalBytes > 0 ? receivedBytes / totalBytes : 0.0;
+          
+          // Update progress in downloadQueue
+          int index = downloadQueue.indexWhere((file) => file['fileCode'] == fileCode);
+          if (index != -1) {
+            downloadQueue[index]['progress'] = progress;
+          }
+
+          // Print progress (optional)
+          print("Downloading: ${(progress * 100).toStringAsFixed(1)}%");
+        }
+        await sink.close();
+
         print("Download complete! File saved at: $filePath");
+
+        // Mark as completed
+        int index = downloadQueue.indexWhere((file) => file['fileCode'] == fileCode);
+        if (index != -1) {
+          downloadQueue[index]['progress'] = 1.0;
+        }
       } else {
-        print("Download failed. Server response: ${response.statusCode}");
+        print("Download failed. Server response: ${streamedResponse.statusCode}");
       }
     } catch (e) {
       print("Error downloading file: $e");
@@ -2939,7 +2984,7 @@ class MainFeature {
     if (fileFolders.containsKey('folders')) {
       dynamic folders = fileFolders['folders'];
       for (dynamic folder in folders) {
-        await downloadFolder(folder['fld_id'], "$folderPath/${folder['name']}");
+        await downloadFolder(folder['fld_id'].toString(), "$folderPath/${folder['name']}");
       }
     }
     if (fileFolders.containsKey('files')) {
