@@ -646,7 +646,13 @@ class _MyFilesPageState extends State<MyFilesPage> {
       backgroundColor: Colors.white,
       appBar: AppBar(
         backgroundColor: Colors.white,
-        title: Text(selectionMode ? "${selectedItems.length} selected" : 'My Files'),
+        title: Text(
+          selectionMode 
+            ? "${selectedItems.length} selected" 
+            : (visitedFolderIDs.last.last != '/'
+                ? visitedFolderIDs.last.last 
+                : 'My Files'),
+        ),
         leading: IconButton(
           icon: Icon(selectionMode ? Icons.close : Icons.arrow_back, color: Colors.blue),
           onPressed: () {
@@ -718,11 +724,10 @@ class _MyFilesPageState extends State<MyFilesPage> {
                 shape: CircleBorder(), // Maintain circular shape for the FAB
                 child: FloatingActionButton(
                   onPressed: () {
-                    print("Add new item action");
                     _pickFiles();
                   },
-                  child: Icon(Icons.add, color: Colors.white),
                   backgroundColor: Colors.blue,
+                  child: Icon(Icons.add, color: Colors.white),
                 ),
               ),
             ),
@@ -731,7 +736,10 @@ class _MyFilesPageState extends State<MyFilesPage> {
       ),
       body: isLoading
           ? Center(child: CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(Colors.blue)))
-          : Column(
+          : RefreshIndicator(
+            onRefresh: _refreshPage, // Function to reload page
+            color: Colors.blue, // Set refresh indicator color
+            child:Column(
               children: [
                 Expanded(
                   child: ListView(
@@ -888,6 +896,7 @@ class _MyFilesPageState extends State<MyFilesPage> {
                 ],
               ],
             ),
+          ),
     );
 
   }
@@ -982,6 +991,15 @@ class _MyFilesPageState extends State<MyFilesPage> {
     try {
       await _fetchFilesAndFolders(item["fld_id"]);
       visitedFolderIDs.add([item['fld_id'], item['name']]);
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+    }
+  }
+
+  Future<void> _refreshPage() async {
+    dynamic item = visitedFolderIDs.last;
+    try {
+      await _fetchFilesAndFolders(item.first);
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
     }
