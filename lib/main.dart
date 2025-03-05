@@ -1744,42 +1744,6 @@ class _MyFilesPageState extends State<MyFilesPage> {
     );
   }
 
-  void _createQuickNoteDialog(BuildContext context) {
-    TextEditingController noteController = TextEditingController();
-
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: Text("Create Quick Note"),
-          content: TextField(
-            controller: noteController,
-            maxLines: 5,
-            decoration: InputDecoration(hintText: "Enter your note"),
-          ),
-          actions: <Widget>[
-            TextButton(
-              child: Text("Cancel"),
-              onPressed: () {
-                Navigator.of(context).pop();
-              },
-            ),
-            TextButton(
-              child: Text("Save & Upload"),
-              onPressed: () {
-                String noteText = noteController.text.trim();
-                if (noteText.isNotEmpty) {
-                  _uploadNoteAsFile(noteText); // Function to save note
-                  Navigator.of(context).pop();
-                }
-              },
-            ),
-          ],
-        );
-      },
-    );
-  }
-
   void _createFolderDialog(BuildContext context) {
     TextEditingController folderNameController = TextEditingController();
 
@@ -1826,9 +1790,109 @@ class _MyFilesPageState extends State<MyFilesPage> {
     );
   }
 
-  void _uploadNoteAsFile(String note) {
-    print("Note uploaded: $note");
-    // Convert note into a file and upload
+  void _createQuickNoteDialog(BuildContext context) {
+    TextEditingController noteController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text("Create Quick Note"),
+          content: TextField(
+            controller: noteController,
+            maxLines: 5,
+            decoration: InputDecoration(hintText: "Enter your note"),
+          ),
+          actions: <Widget>[
+            TextButton(
+              child: Text("Cancel"),
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+            ),
+            TextButton(
+              child: Text("Save & Upload"),
+              onPressed: () {
+                String noteText = noteController.text.trim();
+                if (noteText.isNotEmpty) {
+                  Navigator.of(context).pop(); // Close first dialog
+
+                  // Delay opening the second dialog to ensure the first one is closed
+                  Future.delayed(Duration.zero, () {
+                    _uploadNoteDialog(context, noteText);
+                  });
+                }
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _uploadNoteDialog(BuildContext context, String note) {
+    TextEditingController fileNameController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text("Save Note"),
+          content: TextField(
+            controller: fileNameController,
+            decoration: InputDecoration(hintText: "Enter file name"),
+          ),
+          actions: <Widget>[
+            TextButton(
+              child: Text("Cancel"),
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+            ),
+            TextButton(
+              child: Text("Save"),
+              onPressed: () {
+                String fileName = fileNameController.text.trim();
+                if (fileName.isNotEmpty) {
+                  Navigator.of(context).pop(); // Close file name dialog
+                  _uploadNoteAsFile(fileName, note); // Upload note
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text("File name cannot be empty")),
+                  );
+                }
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _uploadNoteAsFile(String fileName, String note) async {
+    try {
+      // Get the temporary directory
+      final directory = await getTemporaryDirectory();
+      final filePath = "${directory.path}/$fileName.txt";
+      final file = File(filePath);
+
+      // Write the note content to the file
+      await file.writeAsString(note);
+      print("Note saved as: $filePath");
+
+      // Add file to upload queue
+      mainFeature.addUploadQueue({'filePath': filePath, 'folderID': visitedFolderIDs.last.first.toString()});
+
+      // Schedule file deletion after some time (optional)
+      Future.delayed(Duration(minutes: 10), () async {
+        if (await file.exists()) {
+          await file.delete();
+          print("Temporary file deleted: $filePath");
+        }
+      });
+    } catch (e) {
+      print("Error saving or uploading note: $e");
+    }
   }
 
   void _selectFolder() {
