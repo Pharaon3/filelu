@@ -581,6 +581,7 @@ class _MyFilesPageState extends State<MyFilesPage> {
     int itemsPerPage = numberOfImages; // Number of items per page
     int totalItems = folders.length + files.length;
     bool selectionMode = selectedItems.isNotEmpty; // Enable selection mode if items are selected
+    bool isGridView = false;
 
     List<dynamic> getPaginatedItems() {
       if (itemsPerPage == 0) {
@@ -684,6 +685,12 @@ class _MyFilesPageState extends State<MyFilesPage> {
       }
     }
 
+    void _toggleViewMode() {
+      setState(() {
+        isGridView = !isGridView;
+      });
+    }
+
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
@@ -709,6 +716,10 @@ class _MyFilesPageState extends State<MyFilesPage> {
         ),
         actions: [
           if (!selectionMode) ...[
+            IconButton(
+              icon: Icon(isGridView ? Icons.list : Icons.grid_view, color: Colors.blue),
+              onPressed: _toggleViewMode, // Toggle between list and grid view
+            ),
             IconButton(
               icon: Icon(Icons.home, color: Colors.blue),
               onPressed: () => _homeCloudFolder(),
@@ -748,6 +759,8 @@ class _MyFilesPageState extends State<MyFilesPage> {
           ? Stack(
               children: [
                 Positioned(
+                  right: 16,
+                  bottom: (itemsPerPage > 0) ? 50 : 16,
                   child: Material(
                     shape: CircleBorder(), // Maintain circular shape for the FAB
                     child: FloatingActionButton(
@@ -762,7 +775,7 @@ class _MyFilesPageState extends State<MyFilesPage> {
                 if (copyStatus != 0)
                   Positioned(
                     left: 16,
-                    bottom: 16,
+                    bottom: (itemsPerPage > 0) ? 50 : 16,
                     child: Padding(
                       padding: const EdgeInsets.only(left: 12.0),
                       child: FloatingActionButton(
@@ -779,104 +792,108 @@ class _MyFilesPageState extends State<MyFilesPage> {
           : RefreshIndicator(
               onRefresh: _refreshPage, // Function to reload page
               color: Colors.blue, // Set refresh indicator color
-              child: ListView(
-                controller: _scrollController,
+              child: Column(
                 children: [
-                  if (getPaginatedItems().isNotEmpty) ...[
-                    // Display Folders
-                    if (folders.isNotEmpty)
-                      ...getPaginatedItems()
-                          .where((item) => !item.containsKey('file_code'))
-                          .map((folder) {
-                        bool isSelected = selectedItems.contains(folder);
-                        return GestureDetector(
-                          onLongPress: () => toggleSelectionMode(folder),
-                          onTap: () {
-                            if (selectionMode) {
-                              toggleSelectionMode(folder);
-                            } else {
-                              _openCloudFolder(context, folder);
-                            }
-                          },
-                          child: ListTile(
-                            leading: Icon(Icons.folder, size: 40, color: isSelected ? Colors.cyan : Colors.blue),
-                            title: Text(folder['name']),
-                            trailing: IconButton(
-                              icon: Icon(
-                                selectionMode
-                                    ? (isSelected ? Icons.check_circle : Icons.radio_button_unchecked)
-                                    : Icons.more_vert,
-                                color: isSelected ? Colors.blue : null,
-                              ),
-                              onPressed: selectionMode
-                                  ? () => toggleSelectionMode(folder)
-                                  : () => _showOptions(context, folder),
-                            ),
-                          ),
-                        );
-                      }).toList(),
-
-                    // Display Files
-                    if (files.isNotEmpty)
-                      ...getPaginatedItems().where((item) => item.containsKey('file_code')).map((file) {
-                        bool isSelected = selectedItems.contains(file);
-                        return GestureDetector(
-                          onLongPress: () => toggleSelectionMode(file),
-                          onTap: () {
-                            if (selectionMode) {
-                              toggleSelectionMode(file);
-                            } else {
-                              openCloudFile(context, file['file_code'], file['name']);
-                            }
-                          },
-                          child: ListTile(
-                            leading: Stack(
-                              children: [
-                                Image.network(
-                                  file['thumbnail'],
-                                  width: 40,
-                                  height: 40,
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (BuildContext context, Object error, StackTrace? stackTrace) {
-                                    // Get the appropriate icon based on the file type
-                                    return getFileIcon(file['name']);
-                                  },
-                                ),
-                                if (isSelected)
-                                  Positioned.fill(
-                                    child: Container(
-                                      color: Colors.blue.withOpacity(0.5),
-                                      child: Icon(Icons.check, color: Colors.white, size: 40),
+                  Expanded(
+                    child: ListView(
+                      controller: _scrollController,
+                      children: [
+                        if (getPaginatedItems().isNotEmpty) ...[
+                          // Display Folders
+                          if (folders.isNotEmpty)
+                            ...getPaginatedItems().where((item) => !item.containsKey('file_code')).map((folder) {
+                              bool isSelected = selectedItems.contains(folder);
+                              return GestureDetector(
+                                onLongPress: () => toggleSelectionMode(folder),
+                                onTap: () {
+                                  if (selectionMode) {
+                                    toggleSelectionMode(folder);
+                                  } else {
+                                    _openCloudFolder(context, folder);
+                                  }
+                                },
+                                child: ListTile(
+                                  leading: Icon(Icons.folder, size: 40, color: isSelected ? Colors.cyan : Colors.blue),
+                                  title: Text(folder['name']),
+                                  trailing: IconButton(
+                                    icon: Icon(
+                                      selectionMode
+                                          ? (isSelected ? Icons.check_circle : Icons.radio_button_unchecked)
+                                          : Icons.more_vert,
+                                      color: isSelected ? Colors.blue : null,
                                     ),
+                                    onPressed: selectionMode
+                                        ? () => toggleSelectionMode(folder)
+                                        : () => _showOptions(context, folder),
                                   ),
-                              ],
-                            ),
-                            title: Text(file['name']),
-                            trailing: IconButton(
-                              icon: Icon(
-                                selectionMode
-                                    ? (isSelected ? Icons.check_circle : Icons.radio_button_unchecked)
-                                    : Icons.more_vert,
-                                color: isSelected ? Colors.blue : null,
+                                ),
+                              );
+                            }).toList(),
+
+                          // Display Files
+                          if (files.isNotEmpty)
+                            ...getPaginatedItems().where((item) => item.containsKey('file_code')).map((file) {
+                              bool isSelected = selectedItems.contains(file);
+                              return GestureDetector(
+                                onLongPress: () => toggleSelectionMode(file),
+                                onTap: () {
+                                  if (selectionMode) {
+                                    toggleSelectionMode(file);
+                                  } else {
+                                    openCloudFile(context, file['file_code'], file['name']);
+                                  }
+                                },
+                                child: ListTile(
+                                  leading: Stack(
+                                    children: [
+                                      Image.network(
+                                        file['thumbnail'],
+                                        width: 40,
+                                        height: 40,
+                                        fit: BoxFit.cover,
+                                        errorBuilder: (BuildContext context, Object error, StackTrace? stackTrace) {
+                                          // Get the appropriate icon based on the file type
+                                          return getFileIcon(file['name']);
+                                        },
+                                      ),
+                                      if (isSelected)
+                                        Positioned.fill(
+                                          child: Container(
+                                            color: Colors.blue.withOpacity(0.5),
+                                            child: Icon(Icons.check, color: Colors.white, size: 40),
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                  title: Text(file['name']),
+                                  trailing: IconButton(
+                                    icon: Icon(
+                                      selectionMode
+                                          ? (isSelected ? Icons.check_circle : Icons.radio_button_unchecked)
+                                          : Icons.more_vert,
+                                      color: isSelected ? Colors.blue : null,
+                                    ),
+                                    onPressed: selectionMode
+                                        ? () => toggleSelectionMode(file)
+                                        : () => _showOptions(context, file),
+                                  ),
+                                ),
+                              );
+                            }).toList(),
+                        ] else ...[
+                          Center(
+                            child: Padding(
+                              padding: EdgeInsets.all(16.0),
+                              child: Text(
+                                "This folder is empty",
+                                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                               ),
-                              onPressed: selectionMode
-                                  ? () => toggleSelectionMode(file)
-                                  : () => _showOptions(context, file),
                             ),
                           ),
-                        );
-                      }).toList(),
-                  ] else ...[
-                    Center(
-                      child: Padding(
-                        padding: EdgeInsets.all(16.0),
-                        child: Text(
-                          "This folder is empty",
-                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                        ),
-                      ),
+                        ],
+                      ],
                     ),
-                  ],
+                  ),
                   // Pagination Controls
                   if (totalItems > itemsPerPage && itemsPerPage > 0) ...[
                     Row(
