@@ -1795,7 +1795,7 @@ class _MyFilesPageState extends State<MyFilesPage> {
           String filePath = selectedFiles[i];
           mainFeature.addUploadQueue({
             "filePath": filePath,
-            "folderID": "0"
+            "folderID": visitedFolderIDs.last.first.toString()
           });
         }
       }
@@ -2141,9 +2141,6 @@ class _MyFilesPageState extends State<MyFilesPage> {
       if (selectedDirectory != null) {
         print("Selected Folder: $selectedDirectory");
 
-        // List all files inside the selected folder
-        final directory = Directory(selectedDirectory);
-
         String folderID = "";
         for(int i = 0; i < folders.length; i ++) {
           if(folders[i]['name'] == selectedDirectory.split('/').last.split(r'\').last) {
@@ -2153,17 +2150,8 @@ class _MyFilesPageState extends State<MyFilesPage> {
         if (folderID == "") {
           folderID = await mainFeature.createCloudFolder(selectedDirectory.split('/').last.split(r'\').last, visitedFolderIDs.last.first.toString());
         }
-        final files = directory.listSync(recursive: false)
-            .whereType<File>() // Filter out only files, not subdirectories
-            .map((file) => file.path)
-            .toList();
-
-        for (String filePath in files) {
-          mainFeature.addUploadQueue({
-            "filePath": filePath,
-            "folderID": folderID
-          });
-        }
+        
+        mainFeature.uploadFolder(selectedDirectory, folderID);
         print("All files in the folder added to upload queue.");
       } else {
         print("Folder selection canceled.");
