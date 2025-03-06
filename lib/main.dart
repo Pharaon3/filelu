@@ -16,7 +16,7 @@ import 'dart:isolate';
 import 'dart:async';
 
 Map<int, http.StreamedResponse?> activeDownloads = {}; // Stores active requests
-const String baseURL = "https://filelu.com/api";
+const String baseURL = "https://filelu.com/app";
 
 void main() {
   runApp(MyApp());
@@ -513,7 +513,8 @@ class _MyFilesPageState extends State<MyFilesPage> {
   // Fetch files and folders using the API
   Future<void> _fetchFilesAndFolders(fldId) async {
     setState(() {
-      isLoading = true; // Start loading
+      isLoading = true;
+      _isPlusButtonVisible = false;
     });
     await mainFeature.initState();
     final response = await http.get(
@@ -530,7 +531,8 @@ class _MyFilesPageState extends State<MyFilesPage> {
       print('Failed to load folders and files');
     }
     setState(() {
-      isLoading = false; // Start loading
+      isLoading = false;
+      _isPlusButtonVisible = true;
     });
   }
 
@@ -693,8 +695,8 @@ class _MyFilesPageState extends State<MyFilesPage> {
 
     Widget gridView() {
       return RefreshIndicator(
-              onRefresh: _refreshPage, // Function to reload page
-              color: Colors.blue, // Set refresh indicator color
+              onRefresh: _refreshPage,
+              color: Colors.blue,
               child: Column(
                 children: [
                   Expanded(
@@ -780,7 +782,7 @@ class _MyFilesPageState extends State<MyFilesPage> {
                                                       shape: BoxShape.circle,
                                                     ),
                                                     child: Text(
-                                                      "1",
+                                                      item["total_files"].toString(),
                                                       style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
                                                     ),
                                                   ),
@@ -862,8 +864,8 @@ class _MyFilesPageState extends State<MyFilesPage> {
 
     Widget listView() {
       return RefreshIndicator(
-              onRefresh: _refreshPage, // Function to reload page
-              color: Colors.blue, // Set refresh indicator color
+              onRefresh: _refreshPage,
+              color: Colors.blue,
               child: Column(
                 children: [
                   Expanded(
@@ -899,7 +901,7 @@ class _MyFilesPageState extends State<MyFilesPage> {
                                             shape: BoxShape.circle,
                                           ),
                                           child: Text(
-                                            "1",
+                                            folder["total_files"].toString(),
                                             style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
                                           ),
                                         ),
@@ -1067,7 +1069,7 @@ class _MyFilesPageState extends State<MyFilesPage> {
           if (!selectionMode) ...[
             IconButton(
               icon: Icon(isGridView ? Icons.list : Icons.grid_view, color: Colors.blue),
-              onPressed: toggleViewMode, // Toggle between list and grid view
+              onPressed: toggleViewMode,
             ),
             IconButton(
               icon: Icon(Icons.home, color: Colors.blue),
@@ -1432,7 +1434,7 @@ class _MyFilesPageState extends State<MyFilesPage> {
                 await mainFeature.renameFile(item, controller.text);
                 await _fetchFilesAndFolders(visitedFolderIDs.last.first);
                 setState(() {
-                  isLoading = false; // Start loading
+                  isLoading = false;
                 });
               },
               child: Text('Rename', style: TextStyle(color: Colors.blue),),
@@ -1457,7 +1459,7 @@ class _MyFilesPageState extends State<MyFilesPage> {
 
   void _pasteFile() async {
     setState(() {
-      isLoading = true; // Start loading
+      isLoading = true;
     });
     String folderID = visitedFolderIDs.last.first.toString();
     for(dynamic copiedFileFolder in copiedFileFolders){
@@ -2790,7 +2792,7 @@ class _UploadPageState extends State<UploadPage> {
 
   Future<void> _pickFiles() async {
     setState(() {
-      isLoading = true; // Start loading
+      isLoading = true;
     });
 
     // Pick files
