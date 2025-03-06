@@ -762,7 +762,31 @@ class _MyFilesPageState extends State<MyFilesPage> {
                                                   ),
                                               ],
                                             )
-                                          : Icon(Icons.folder, size: 60, color: isSelected ? Colors.cyan : Colors.blue),
+                                          : Stack(
+                                              clipBehavior: Clip.none,
+                                              children: [
+                                                Icon(
+                                                  Icons.folder,
+                                                  size: 60,
+                                                  color: isSelected ? Colors.cyan : Colors.blue,
+                                                ),
+                                                Positioned(
+                                                  top: -5,
+                                                  left: -5,
+                                                  child: Container(
+                                                    padding: EdgeInsets.all(4),
+                                                    decoration: BoxDecoration(
+                                                      color: Colors.green,
+                                                      shape: BoxShape.circle,
+                                                    ),
+                                                    child: Text(
+                                                      "1",
+                                                      style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
                                       SizedBox(height: 8),
                                       Text(
                                         item['name'],
@@ -861,20 +885,38 @@ class _MyFilesPageState extends State<MyFilesPage> {
                                   }
                                 },
                                 child: ListTile(
-                                  leading: Icon(Icons.folder, size: 40, color: isSelected ? Colors.cyan : Colors.blue),
+                                  leading: Stack(
+                                    clipBehavior: Clip.none,
+                                    children: [
+                                      Icon(Icons.folder, size: 40, color: isSelected ? Colors.cyan : Colors.blue),
+                                      Positioned(
+                                        top: -5,
+                                        left: -5,
+                                        child: Container(
+                                          padding: EdgeInsets.all(4),
+                                          decoration: BoxDecoration(
+                                            color: Colors.green,
+                                            shape: BoxShape.circle,
+                                          ),
+                                          child: Text(
+                                            "1",
+                                            style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                   title: Text(folder['name']),
                                   trailing: IconButton(
-                                      icon: Icon(
-                                        selectionMode
-                                            ? (isSelected ? Icons.check_circle : Icons.radio_button_unchecked)
-                                            : Icons.more_vert,
-                                        color: isSelected ? Colors.blue : null,
-                                      ),
-                                      onPressed: selectionMode
-                                        ? () => toggleSelectionMode(folder)
-                                        : () => _showOptions(context, folder),
+                                    icon: Icon(
+                                      selectionMode
+                                          ? (isSelected ? Icons.check_circle : Icons.radio_button_unchecked)
+                                          : Icons.more_vert,
+                                      color: isSelected ? Colors.blue : null,
                                     ),
+                                    onPressed: selectionMode ? () => toggleSelectionMode(folder) : () => _showOptions(context, folder),
                                   ),
+                                ),
                               );
                             }).toList(),
 
