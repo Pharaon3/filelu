@@ -726,6 +726,8 @@ class _MyFilesPageState extends State<MyFilesPage> {
                               itemBuilder: (context, index) {
                                 final item = getPaginatedItems()[index];
                                 bool isSelected = selectedItems.contains(item);
+                                bool isPrivate = item['link_pass'].toString() == "1";
+                                bool isOnlyMe = item['only_me'].toString() == "1";
 
                                 return GestureDetector(
                                   onLongPress: () => toggleSelectionMode(item),
@@ -756,10 +758,10 @@ class _MyFilesPageState extends State<MyFilesPage> {
                                     child: Column(
                                       mainAxisAlignment: MainAxisAlignment.center,
                                       children: [
-                                        item.containsKey('file_code')
-                                            ? Stack(
-                                                children: [
-                                                  Image.network(
+                                        Stack(
+                                          children: [
+                                            item.containsKey('file_code')
+                                                ? Image.network(
                                                     item['thumbnail'],
                                                     width: 60,
                                                     height: 60,
@@ -767,44 +769,41 @@ class _MyFilesPageState extends State<MyFilesPage> {
                                                     errorBuilder: (context, error, stackTrace) {
                                                       return getFileIcon(item['name']);
                                                     },
-                                                  ),
-                                                  if (isSelected)
-                                                    Positioned.fill(
-                                                      child: Container(
-                                                        color: Colors.blue.withOpacity(0.5),
-                                                        child: Icon(Icons.check, color: Colors.white, size: 40),
-                                                      ),
-                                                    ),
-                                                ],
-                                              )
-                                            : Stack(
-                                                clipBehavior: Clip.none,
-                                                children: [
-                                                  Icon(
+                                                  )
+                                                : Icon(
                                                     Icons.folder,
                                                     size: 60,
                                                     color: isSelected ? Colors.cyan : Colors.blue,
                                                   ),
-                                                  Positioned(
-                                                    top: -5,
-                                                    left: -5,
-                                                    child: Container(
-                                                      padding: EdgeInsets.all(4),
-                                                      decoration: BoxDecoration(
-                                                        color: Colors.green,
-                                                        shape: BoxShape.circle,
-                                                      ),
-                                                      child: Text(
-                                                        item["total_files"].toString(),
-                                                        style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
-                                                      ),
-                                                    ),
+
+                                            // Lock Icon for Private Files
+                                            if (isPrivate)
+                                              Positioned(
+                                                top: -5,
+                                                left: -5,
+                                                child: Container(
+                                                  padding: EdgeInsets.all(4),
+                                                  child: Icon(
+                                                    Icons.lock,
+                                                    size: 16,
+                                                    color: Colors.green,
                                                   ),
-                                                ],
+                                                ),
                                               ),
+
+                                            // Selection Overlay
+                                            if (isSelected)
+                                              Positioned.fill(
+                                                child: Container(
+                                                  color: Colors.blue.withOpacity(0.5),
+                                                  child: Icon(Icons.check, color: Colors.white, size: 40),
+                                                ),
+                                              ),
+                                          ],
+                                        ),
                                         SizedBox(height: 8),
                                         Text(
-                                          (item['only_me'].toString() == "1") ? "${item['name']} (Only Me)" : item['name'],
+                                          isOnlyMe ? "${item['name']} (Only Me)" : item['name'],
                                           textAlign: TextAlign.center,
                                           overflow: TextOverflow.ellipsis,
                                           style: TextStyle(fontWeight: FontWeight.bold),
@@ -845,7 +844,7 @@ class _MyFilesPageState extends State<MyFilesPage> {
           ),
 
           // Pagination Controls (Now outside RefreshIndicator)
-          if (totalItems > itemsPerPage && itemsPerPage > 0) 
+          if (totalItems > itemsPerPage && itemsPerPage > 0)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 10),
               child: Row(
@@ -982,6 +981,7 @@ class _MyFilesPageState extends State<MyFilesPage> {
                                   },
                                   child: ListTile(
                                     leading: Stack(
+                                      clipBehavior: Clip.none,
                                       children: [
                                         Image.network(
                                           file['thumbnail'],
@@ -989,10 +989,15 @@ class _MyFilesPageState extends State<MyFilesPage> {
                                           height: 40,
                                           fit: BoxFit.cover,
                                           errorBuilder: (BuildContext context, Object error, StackTrace? stackTrace) {
-                                            // Get the appropriate icon based on the file type
                                             return getFileIcon(file['name']);
                                           },
                                         ),
+                                        if (file['link_pass'].toString() == "1") // Check if link_pass is 1
+                                          Positioned(
+                                            top: -5,
+                                            left: -5,
+                                            child: Icon(Icons.lock, color: Colors.green, size: 16),
+                                          ),
                                         if (isSelected)
                                           Positioned.fill(
                                             child: Container(
@@ -1212,6 +1217,7 @@ class _MyFilesPageState extends State<MyFilesPage> {
       builder: (context) {
         return FileOptions(
           item: item,
+          isAllFiles: isAllFiles(item),
           onRename: () {
             Navigator.pop(context);
             _showRenameDialog(context, item);
@@ -1304,7 +1310,26 @@ class _MyFilesPageState extends State<MyFilesPage> {
             _fetchFilesAndFolders(visitedFolderIDs.last.first.toString());
           },
           onSetPW: () async {
-
+            Navigator.pop(context);
+            if(item != "") {
+              if (item['link_pass'].toString() == "1") {
+                _unsetPassword(item);
+              } else {
+                _setPasswordDialog(context, item);
+              }
+            } else {
+              bool isAllSet = true;
+              for (int i = 0; i < selectedItems.length; i ++) {
+                if (selectedItems[i]['link_pass'].toString() == "0") {
+                  isAllSet = false;
+                }
+              }
+              if (isAllSet) {
+                _unsetPassword(item);
+              } else {
+                _setPasswordDialog(context, item);
+              }
+            }
           },
         );
       },
@@ -1524,6 +1549,86 @@ class _MyFilesPageState extends State<MyFilesPage> {
         );
       },
     );
+  }
+
+  void _setPasswordDialog(BuildContext context, dynamic item) {
+    TextEditingController controller = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text('Set Password'),
+          content: TextField(
+            controller: controller,
+            decoration: InputDecoration(
+              hintText: 'Type Password Here.',
+              labelStyle: TextStyle(color: Colors.blue), // Change label color
+              focusedBorder: UnderlineInputBorder(
+                borderSide: BorderSide(color: Colors.blue, width: 2.0), // Border when focused
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () async {
+                Navigator.pop(context);
+                setState(() {
+                  isLoading = true;
+                });
+                if (item != "") {
+                  await mainFeature.lockItem(item, controller.text);
+                } else {
+                  for (dynamic selectedItem in selectedItems) {
+                    await mainFeature.lockItem(selectedItem, controller.text);
+                  }
+                }
+                await _fetchFilesAndFolders(visitedFolderIDs.last.first);
+                setState(() {
+                  isLoading = false;
+                  selectedItems = [];
+                });
+              },
+              child: Text('Lock File', style: TextStyle(color: Colors.blue),),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _unsetPassword(dynamic item) async {
+    setState(() {
+      isLoading = true;
+    });
+    if (item != "") {
+      await mainFeature.lockItem(item, "");
+    } else {
+      for (dynamic selectedItem in selectedItems) {
+        await mainFeature.lockItem(selectedItem, "");
+      }
+    }
+    await _fetchFilesAndFolders(visitedFolderIDs.last.first);
+    setState(() {
+      isLoading = false;
+      selectedItems = [];
+    });
+  }
+
+  bool isAllFiles(dynamic item) {
+    if (item != "") {
+      if (item.containsKey('file_code')) {
+        return true;
+      } else {
+        return false;
+      }
+    } else {
+      for (int i = 0; i < selectedItems.length; i ++) {
+        if (!selectedItems[i].containsKey('file_code')) {
+          return false;
+        }
+      }
+      return true;
+    }
   }
 
   void _copyFile(dynamic item, int copyOrMove) {
@@ -2290,6 +2395,7 @@ class FileFolder extends StatelessWidget {
 
 class FileOptions extends StatelessWidget {
   final dynamic item;
+  final bool isAllFiles;
   final VoidCallback onRename;
   final VoidCallback onCopy;
   final VoidCallback onMove;
@@ -2300,6 +2406,7 @@ class FileOptions extends StatelessWidget {
 
   const FileOptions({
     required this.item,
+    required this.isAllFiles,
     required this.onRename,
     required this.onCopy,
     required this.onMove,
@@ -2334,10 +2441,12 @@ class FileOptions extends StatelessWidget {
           title: Text('Remove'),
           onTap: onRemove,
         ),
+        if (isAllFiles)
         ListTile(
           title: Text('Sharing/Only-Me'),
           onTap: onShare,
         ),
+        if (isAllFiles)
         ListTile(
           title: Text('Set Password'),
           onTap: onSetPW,
@@ -3674,6 +3783,21 @@ class MainFeature {
       String shareState = (1 - item['only_me']).toString();
       final response = await http.get(
         Uri.parse('$baseURL/file/only_me?file_code=$fileCode&only_me=$shareState&sess_id=$sessionId'),
+      );
+      if (response.statusCode == 200) {
+      } else {
+      }
+    } else {
+      // String folderID = item['fld_id'].toString();
+      print("Only Files are able to share.");
+    }
+  }
+
+  Future<void> lockItem(dynamic item, String password) async {
+    if(item.containsKey('file_code')) {
+      String fileCode = item['file_code'].toString();
+      final response = await http.get(
+        Uri.parse('$baseURL/file/set_password?file_code=$fileCode&file_password=$password&sess_id=$sessionId'),
       );
       if (response.statusCode == 200) {
       } else {
