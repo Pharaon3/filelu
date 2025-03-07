@@ -804,7 +804,7 @@ class _MyFilesPageState extends State<MyFilesPage> {
                                               ),
                                         SizedBox(height: 8),
                                         Text(
-                                          item['name'],
+                                          (item['only_me'].toString() == "1") ? "${item['name']} (Only Me)" : item['name'],
                                           textAlign: TextAlign.center,
                                           overflow: TextOverflow.ellipsis,
                                           style: TextStyle(fontWeight: FontWeight.bold),
@@ -1002,7 +1002,7 @@ class _MyFilesPageState extends State<MyFilesPage> {
                                           ),
                                       ],
                                     ),
-                                    title: Text(file['name']),
+                                    title: Text((file['only_me'].toString() == "1") ? "${file['name']} (Only Me)" : file['name']),
                                     trailing: IconButton(
                                       icon: Icon(
                                         selectionMode
@@ -1284,6 +1284,27 @@ class _MyFilesPageState extends State<MyFilesPage> {
               isLoading = false;
             });
             _fetchFilesAndFolders(visitedFolderIDs.last.first.toString());
+          },
+          onShare: () async {
+            Navigator.pop(context);
+            setState(() {
+              isLoading = true;
+            });
+            if (item != "") {
+              await mainFeature.shareItem(item);
+            } else {
+              for (dynamic selectedItem in selectedItems) {
+                await mainFeature.shareItem(selectedItem);
+              }
+            }
+            setState(() {
+              selectedItems = [];
+              isLoading = false;
+            });
+            _fetchFilesAndFolders(visitedFolderIDs.last.first.toString());
+          },
+          onSetPW: () async {
+
           },
         );
       },
@@ -2274,6 +2295,8 @@ class FileOptions extends StatelessWidget {
   final VoidCallback onMove;
   final VoidCallback onDownload;
   final VoidCallback onRemove;
+  final VoidCallback onShare;
+  final VoidCallback onSetPW;
 
   const FileOptions({
     required this.item,
@@ -2282,6 +2305,8 @@ class FileOptions extends StatelessWidget {
     required this.onMove,
     required this.onDownload,
     required this.onRemove,
+    required this.onShare,
+    required this.onSetPW,
   });
 
   @override
@@ -2308,6 +2333,14 @@ class FileOptions extends StatelessWidget {
         ListTile(
           title: Text('Remove'),
           onTap: onRemove,
+        ),
+        ListTile(
+          title: Text('Sharing/Only-Me'),
+          onTap: onShare,
+        ),
+        ListTile(
+          title: Text('Set Password'),
+          onTap: onSetPW,
         ),
       ],
     );
@@ -3632,6 +3665,22 @@ class MainFeature {
     } else {
       String folderID = item['fld_id'].toString();
       await removeFolder(folderID);
+    }
+  }
+
+  Future<void> shareItem(dynamic item) async {
+    if(item.containsKey('file_code')) {
+      String fileCode = item['file_code'].toString();
+      String shareState = (1 - item['only_me']).toString();
+      final response = await http.get(
+        Uri.parse('$baseURL/file/only_me?file_code=$fileCode&only_me=$shareState&sess_id=$sessionId'),
+      );
+      if (response.statusCode == 200) {
+      } else {
+      }
+    } else {
+      // String folderID = item['fld_id'].toString();
+      print("Only Files are able to share.");
     }
   }
 
