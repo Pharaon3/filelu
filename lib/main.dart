@@ -671,19 +671,19 @@ class _MyFilesPageState extends State<MyFilesPage> {
         case 'jpeg':
         case 'png':
         case 'gif':
-          return Icon(Icons.image, color: Colors.blue);
+          return Icon(Icons.image, size: 40, color: Colors.blue);
         case 'mp3':
         case 'wav':
-          return Icon(Icons.audiotrack, color: Colors.red);
+          return Icon(Icons.audiotrack, size: 40, color: Colors.red);
         case 'mp4':
         case 'mov':
-          return Icon(Icons.videocam, color: Colors.green);
+          return Icon(Icons.videocam, size: 40, color: Colors.green);
         case 'txt':
-          return Icon(Icons.description, color: Colors.orange);
+          return Icon(Icons.description, size: 40, color: Colors.orange);
         case 'pdf':
-          return Icon(Icons.picture_as_pdf, color: Colors.purple);
+          return Icon(Icons.picture_as_pdf, size: 40, color: Colors.purple);
         default:
-          return Icon(Icons.insert_drive_file, color: Colors.grey); // Default icon for unknown types
+          return Icon(Icons.insert_drive_file, size: 40, color: Colors.grey); // Default icon for unknown types
       }
     }
 
@@ -728,6 +728,8 @@ class _MyFilesPageState extends State<MyFilesPage> {
                                 bool isSelected = selectedItems.contains(item);
                                 bool isPrivate = item['link_pass'].toString() == "1";
                                 bool isOnlyMe = item['only_me'].toString() == "1";
+                                bool isFolder = !item.containsKey('file_code');
+                                bool isCrypted = (item.containsKey('file_code') && item['encrypted'].toString() != "null") || item['fld_encrypted'].toString() == "1";
 
                                 return GestureDetector(
                                   onLongPress: () => toggleSelectionMode(item),
@@ -775,7 +777,6 @@ class _MyFilesPageState extends State<MyFilesPage> {
                                                     size: 60,
                                                     color: isSelected ? Colors.cyan : Colors.blue,
                                                   ),
-
                                             // Lock Icon for Private Files
                                             if (isPrivate)
                                               Positioned(
@@ -790,7 +791,48 @@ class _MyFilesPageState extends State<MyFilesPage> {
                                                   ),
                                                 ),
                                               ),
-
+                                            if (isFolder)
+                                              Positioned(
+                                                top: 6,
+                                                left: 6,
+                                                child: Container(
+                                                  padding: EdgeInsets.all(4),
+                                                  decoration: BoxDecoration(
+                                                    color: Colors.green,
+                                                    shape: BoxShape.circle,
+                                                  ),
+                                                  child: Text(
+                                                    item["total_files"].toString(),
+                                                    style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                                                  ),
+                                                ),
+                                              ),
+                                            if (isCrypted)
+                                              Positioned(
+                                                bottom: 8, // Adjust this value to position it just below the icon
+                                                left: 0,
+                                                right: 0,
+                                                child: IntrinsicWidth( // Ensures the width fits the content
+                                                  child: Container(
+                                                    padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                    decoration: BoxDecoration(
+                                                      color: Colors.green,
+                                                      borderRadius: BorderRadius.circular(8),
+                                                    ),
+                                                    child: Center( // Ensures the text is centered inside the container
+                                                      child: Text(
+                                                        "SSCE",
+                                                        textAlign: TextAlign.center,
+                                                        style: TextStyle(
+                                                          color: Color.fromARGB(255, 180, 243, 168),
+                                                          fontSize: 10,
+                                                          fontWeight: FontWeight.bold,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
                                             // Selection Overlay
                                             if (isSelected)
                                               Positioned.fill(
@@ -919,6 +961,8 @@ class _MyFilesPageState extends State<MyFilesPage> {
                                   .where((item) => !item.containsKey('file_code'))
                                   .map((folder) {
                                 bool isSelected = selectedItems.contains(folder);
+                                bool isCrypted = folder['fld_encrypted'].toString() == "1";
+
                                 return GestureDetector(
                                   onLongPress: () => toggleSelectionMode(folder),
                                   onTap: () {
@@ -948,6 +992,32 @@ class _MyFilesPageState extends State<MyFilesPage> {
                                             ),
                                           ),
                                         ),
+                                        if (isCrypted)
+                                          Positioned(
+                                            bottom: 6, // Adjust this value to position it just below the icon
+                                            left: 0,
+                                            right: 0,
+                                            child: IntrinsicWidth( // Ensures the width fits the content
+                                              child: Container(
+                                                padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                decoration: BoxDecoration(
+                                                  color: Colors.green,
+                                                  borderRadius: BorderRadius.circular(8),
+                                                ),
+                                                child: Center( // Ensures the text is centered inside the container
+                                                  child: Text(
+                                                    "SSCE",
+                                                    textAlign: TextAlign.center,
+                                                    style: TextStyle(
+                                                      color: Color.fromARGB(255, 180, 243, 168),
+                                                      fontSize: 8,
+                                                      fontWeight: FontWeight.bold,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                          ),
                                       ],
                                     ),
                                     title: Text(folder['name']),
@@ -970,6 +1040,7 @@ class _MyFilesPageState extends State<MyFilesPage> {
                             if (files.isNotEmpty)
                               ...getPaginatedItems().where((item) => item.containsKey('file_code')).map((file) {
                                 bool isSelected = selectedItems.contains(file);
+                                bool isCrypted = file['encrypted'].toString() != "null";
                                 return GestureDetector(
                                   onLongPress: () => toggleSelectionMode(file),
                                   onTap: () {
@@ -997,6 +1068,28 @@ class _MyFilesPageState extends State<MyFilesPage> {
                                             top: -5,
                                             left: -5,
                                             child: Icon(Icons.lock, color: Colors.green, size: 16),
+                                          ),
+                                        if (isCrypted)
+                                          Positioned(
+                                            bottom: 2, // Adjust this value to position it just below the icon
+                                            left: 0,
+                                            right: 0,
+                                            child: Container(
+                                              padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                              decoration: BoxDecoration(
+                                                color: Colors.green,
+                                                borderRadius: BorderRadius.circular(8),
+                                              ),
+                                              child: Text(
+                                                "SSCE",
+                                                textAlign: TextAlign.center,
+                                                style: TextStyle(
+                                                  color: Colors.white,
+                                                  fontSize: 10,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
+                                            ),
                                           ),
                                         if (isSelected)
                                           Positioned.fill(
@@ -1378,7 +1471,9 @@ class _MyFilesPageState extends State<MyFilesPage> {
 
         // Check file type and open it
         if (['txt'].contains(fileExtension)) {
-          _showTextFile(context, file);
+          print("file: $file");
+          String content = await file.readAsString();
+          _showTextFile(context, content);
         } else if (['png', 'jpg', 'jpeg', 'gif'].contains(fileExtension)) {
           _showImageFile(context, file);
         } else if (['mp3', 'wav', 'aac'].contains(fileExtension)) {
@@ -1403,8 +1498,8 @@ class _MyFilesPageState extends State<MyFilesPage> {
   }
 
   // Show text file content
-  void _showTextFile(BuildContext context, File file) async {
-    String content = await file.readAsString();
+  void _showTextFile(BuildContext context, String content) {
+    print("content: $content");
     showDialog(
       context: context,
       builder: (context) {
