@@ -455,6 +455,7 @@ class MyFilesPage extends StatefulWidget {
 class _MyFilesPageState extends State<MyFilesPage> {
   List<dynamic> folders = [];
   List<dynamic> files = [];
+  List<dynamic> deletedFiles = [];
   List<dynamic> visitedFolderIDs = [[0, '/'], [0, '/']];
   List<dynamic> copiedFileFolders = [];
   int copyStatus = 0; // 0: empty, 1: copied 2: moved
@@ -474,6 +475,7 @@ class _MyFilesPageState extends State<MyFilesPage> {
   final ScrollController _scrollController = ScrollController();
   bool _isPlusButtonVisible = true;
   bool isGridView = false;
+  bool isTrashView = false;
   List<String> videoExtensions = ['mp4', 'mov', 'avi', 'mkv', 'flv', 'wmv'];
   List<String> audioExtensions = ['mp3', 'wav', 'aac', 'flac', 'ogg', 'm4a'];
   List<String> photoExtensions = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'];
@@ -540,6 +542,30 @@ class _MyFilesPageState extends State<MyFilesPage> {
     });
   }
 
+  Future<void> _fetchTrash() async {
+    setState(() {
+      isLoading = true;
+      _isPlusButtonVisible = false;
+    });
+    await mainFeature.initState();
+    final response = await http.get(
+      Uri.parse('$baseURL/files/deleted?sess_id=${mainFeature.sessionId}'),
+    );
+
+    if (response.statusCode == 200) {
+      var data = jsonDecode(utf8.decode(response.bodyBytes));
+      setState(() {
+        deletedFiles = data['result'];
+      });
+    } else {
+      print('Failed to load folders and files');
+    }
+    setState(() {
+      isLoading = false;
+      _isPlusButtonVisible = true;
+    });
+  }
+
   Future<String> _getDownloadLink(fileCode) async {
     final response = await http.get(
       Uri.parse('$baseURL/file/direct_link?file_code=$fileCode&sess_id=${mainFeature.sessionId}')
@@ -591,10 +617,37 @@ class _MyFilesPageState extends State<MyFilesPage> {
 
     List<dynamic> getPaginatedItems() {
       if (itemsPerPage == 0) {
-        return [...folders, ...files]; // No limit
+        if (isTrashView) {
+          return [
+            {
+              "name": "Trash",
+              "fld_only_me": 0,
+              "fld_id": "trash",
+              "total_files": deletedFiles.length
+            },
+            ...folders, 
+            ...files
+          ];
+        } else {
+          return [...folders, ...files];
+        }
       }
       int startIndex = currentPage * itemsPerPage;
       int endIndex = startIndex + itemsPerPage;
+      if (isTrashView) {
+        return [
+          {
+            "name": "Trash",
+            "fld_only_me": 0,
+            "fld_id": "trash",
+            "total_files": deletedFiles.length
+          },
+          ...[...folders, ...files].sublist(
+            startIndex,
+            endIndex > totalItems ? totalItems : endIndex,
+          ),
+        ];
+      }
       return [...folders, ...files].sublist(
         startIndex,
         endIndex > totalItems ? totalItems : endIndex,
@@ -760,6 +813,16 @@ class _MyFilesPageState extends State<MyFilesPage> {
               return documentExtensions.contains(extension);
             }).toList();
           });
+          break;
+        case "trash":
+          if(isTrashView) {
+            setState(() {
+              isTrashView = false;
+            });
+          } else {
+            await _fetchTrash();
+            isTrashView = true;
+          }
           break;
         default:
           break;
@@ -1049,7 +1112,7 @@ class _MyFilesPageState extends State<MyFilesPage> {
                                     leading: Stack(
                                       clipBehavior: Clip.none,
                                       children: [
-                                        Icon(Icons.folder, size: 40, color: isSelected ? Colors.cyan : Colors.blue),
+                                        Icon(folder['name'] == 'Trash' ? Icons.delete : Icons.folder, size: 40, color: isSelected ? Colors.cyan : Colors.blue),
                                         Positioned(
                                           top: -5,
                                           left: -5,
@@ -1378,6 +1441,14 @@ class _MyFilesPageState extends State<MyFilesPage> {
                         title: Text('Documents'),
                       ),
                     ),
+                    PopupMenuDivider(),
+                    PopupMenuItem<String>(
+                      value: 'trash',
+                      child: ListTile(
+                        leading: Icon(Icons.delete),
+                        title: Text(isTrashView ? 'Hide Trash' : 'View Trash'),
+                      ),
+                    ),
                   ],
                 ).then((value) {
                   if (value != null) {
@@ -1589,11 +1660,19 @@ class _MyFilesPageState extends State<MyFilesPage> {
 
   // Open Cloud Folder and show Files/Folders in it.
   void _openCloudFolder(BuildContext context, dynamic item) async {
-    try {
-      await _fetchFilesAndFolders(item["fld_id"]);
-      visitedFolderIDs.add([item['fld_id'], item['name']]);
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+    if (item['name'] == 'Trash') {
+      setState(() {
+        folders = [];
+        files = deletedFiles;
+        visitedFolderIDs.add(['', 'Trash']);
+      });
+    } else {
+      try {
+        await _fetchFilesAndFolders(item["fld_id"]);
+        visitedFolderIDs.add([item['fld_id'], item['name']]);
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+      }
     }
   }
 
