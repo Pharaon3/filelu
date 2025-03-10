@@ -474,6 +474,10 @@ class _MyFilesPageState extends State<MyFilesPage> {
   final ScrollController _scrollController = ScrollController();
   bool _isPlusButtonVisible = true;
   bool isGridView = false;
+  List<String> videoExtensions = ['mp4', 'mov', 'avi', 'mkv', 'flv', 'wmv'];
+  List<String> audioExtensions = ['mp3', 'wav', 'aac', 'flac', 'ogg', 'm4a'];
+  List<String> photoExtensions = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'];
+  List<String> documentExtensions = ['pdf', 'doc', 'docx', 'txt', 'xlsx', 'ppt', 'pptx'];
 
   _MyFilesPageState({required this.mainFeature});
 
@@ -687,10 +691,79 @@ class _MyFilesPageState extends State<MyFilesPage> {
       }
     }
 
-    void toggleViewMode() {
-      setState(() {
-        isGridView = !isGridView;
-      });
+    void handleMenuSelection(String selectedOption) async {
+      switch(selectedOption) {
+        case "grid":
+          setState(() {
+            isGridView = true;
+          });
+          break;
+        case "list":
+          setState(() {
+            isGridView = false;
+          });
+          break;
+        case "name":
+          setState(() {
+            folders.sort((a, b) => a['name'].toString().toLowerCase().compareTo(b['name'].toString().toLowerCase()));
+            files.sort((a, b) => a['name'].toString().toLowerCase().compareTo(b['name'].toString().toLowerCase()));
+          });
+          break;
+        case "date":
+          setState(() {
+            folders.sort((a, b) => a['name'].toString().toLowerCase().compareTo(b['name'].toString().toLowerCase()));
+            files.sort((a, b) => a['uploaded'].toString().toLowerCase().compareTo(b['uploaded'].toString().toLowerCase()));
+          });
+          break;
+        case "size":
+          setState(() {
+            folders.sort((a, b) => a['name'].toString().toLowerCase().compareTo(b['name'].toString().toLowerCase()));
+            files.sort((a, b) => a['uploaded'].toString().toLowerCase().compareTo(b['uploaded'].toString().toLowerCase()));
+          });
+          break;
+        case "video":
+          await _fetchFilesAndFolders(visitedFolderIDs.last.first);
+          setState(() {
+            folders.sort((a, b) => a['name'].toString().toLowerCase().compareTo(b['name'].toString().toLowerCase()));
+            files = files.where((file) {
+              String extension = file['name'].toString().split('.').last.toLowerCase();
+              return videoExtensions.contains(extension);
+            }).toList();
+          });
+          break;
+        case "audio":
+          await _fetchFilesAndFolders(visitedFolderIDs.last.first);
+          setState(() {
+            folders.sort((a, b) => a['name'].toString().toLowerCase().compareTo(b['name'].toString().toLowerCase()));
+            files = files.where((file) {
+              String extension = file['name'].toString().split('.').last.toLowerCase();
+              return audioExtensions.contains(extension);
+            }).toList();
+          });
+          break;
+        case "photo":
+          await _fetchFilesAndFolders(visitedFolderIDs.last.first);
+          setState(() {
+            folders.sort((a, b) => a['name'].toString().toLowerCase().compareTo(b['name'].toString().toLowerCase()));
+            files = files.where((file) {
+              String extension = file['name'].toString().split('.').last.toLowerCase();
+              return photoExtensions.contains(extension);
+            }).toList();
+          });
+          break;
+        case "document":
+          await _fetchFilesAndFolders(visitedFolderIDs.last.first);
+          setState(() {
+            folders.sort((a, b) => a['name'].toString().toLowerCase().compareTo(b['name'].toString().toLowerCase()));
+            files = files.where((file) {
+              String extension = file['name'].toString().split('.').last.toLowerCase();
+              return documentExtensions.contains(extension);
+            }).toList();
+          });
+          break;
+        default:
+          break;
+      }
     }
 
     Widget gridView() {
@@ -1226,8 +1299,93 @@ class _MyFilesPageState extends State<MyFilesPage> {
         actions: [
           if (!selectionMode) ...[
             IconButton(
-              icon: Icon(isGridView ? Icons.list : Icons.grid_view, color: Colors.blue),
-              onPressed: toggleViewMode,
+              icon: Icon(Icons.sort, color: Colors.blue),
+              onPressed: () {
+                final RenderBox renderBox = context.findRenderObject() as RenderBox;
+                final Offset offset = renderBox.localToGlobal(Offset.zero);
+                
+                showMenu<String>(
+                  context: context,
+                  position: RelativeRect.fromLTRB(
+                    offset.dx, 
+                    offset.dy + renderBox.size.height, // Directly below the icon
+                    offset.dx + renderBox.size.width,
+                    offset.dy + renderBox.size.height + 300, // Ensures dropdown grows downward
+                  ),
+                  items: <PopupMenuEntry<String>>[  // Explicitly defining the type
+                    PopupMenuItem<String>(
+                      value: 'grid',
+                      child: ListTile(
+                        leading: Icon(Icons.grid_view),
+                        title: Text('Grid View'),
+                      ),
+                    ),
+                    PopupMenuItem<String>(
+                      value: 'list',
+                      child: ListTile(
+                        leading: Icon(Icons.list),
+                        title: Text('List View'),
+                      ),
+                    ),
+                    PopupMenuDivider(),  // This is fine, no need for a type here
+                    PopupMenuItem<String>(
+                      value: 'name',
+                      child: ListTile(
+                        leading: Icon(Icons.sort_by_alpha),
+                        title: Text('Sort by Name'),
+                      ),
+                    ),
+                    PopupMenuItem<String>(
+                      value: 'date',
+                      child: ListTile(
+                        leading: Icon(Icons.access_time),
+                        title: Text('Sort by Date'),
+                      ),
+                    ),
+                    PopupMenuItem<String>(
+                      value: 'size',
+                      child: ListTile(
+                        leading: Icon(Icons.storage),
+                        title: Text('Sort by Size'),
+                      ),
+                    ),
+                    PopupMenuDivider(),
+                    PopupMenuItem<String>(
+                      value: 'video',
+                      child: ListTile(
+                        leading: Icon(Icons.movie),
+                        title: Text('Videos'),
+                      ),
+                    ),
+                    PopupMenuItem<String>(
+                      value: 'audio',
+                      child: ListTile(
+                        leading: Icon(Icons.audiotrack),
+                        title: Text('Audio'),
+                      ),
+                    ),
+                    PopupMenuItem<String>(
+                      value: 'photo',
+                      child: ListTile(
+                        leading: Icon(Icons.image),
+                        title: Text('Photos'),
+                      ),
+                    ),
+                    PopupMenuItem<String>(
+                      value: 'document',
+                      child: ListTile(
+                        leading: Icon(Icons.description),
+                        title: Text('Documents'),
+                      ),
+                    ),
+                  ],
+                ).then((value) {
+                  if (value != null) {
+                    handleMenuSelection(value);
+                  }
+                });
+
+              },
             ),
             IconButton(
               icon: Icon(Icons.home, color: Colors.blue),
