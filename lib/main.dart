@@ -404,7 +404,7 @@ class _MainPageState extends State<MainPage> {
       case 2:
         return Transfer(mainFeature: mainFeature,);
       case 3:
-        return UploadPage(mainFeature: mainFeature,);
+        return MyAccount(mainFeature: mainFeature,);
       default:
         return MyFilesPage(mainFeature: mainFeature,);
     }
@@ -1335,6 +1335,99 @@ class _MyFilesPageState extends State<MyFilesPage> {
         ],
       );
     }
+    
+    void searchInData(Map<String, dynamic> data, String query) {
+      List<String> matchedFiles = [];
+      List<String> matchedFolders = [];
+
+      void recursiveSearch(Map<String, dynamic> folderContent) {
+        // Search in files
+        if (folderContent.containsKey("files")) {
+          folderContent["files"].keys.forEach((fileName) {
+            if (fileName.toLowerCase().contains(query.toLowerCase())) {
+              matchedFiles.add(fileName);
+            }
+          });
+        }
+
+        // Search in folders
+        if (folderContent.containsKey("folders")) {
+          List<dynamic> folders = folderContent["folders"];
+          for (var folder in folders) {
+            if (folder["folder_name"].toLowerCase().contains(query.toLowerCase())) {
+              matchedFolders.add(folder["folder_name"]);
+            }
+            // Recursively search inside subfolders
+            if (folder.containsKey("content")) {
+              recursiveSearch(folder["content"]);
+            }
+          }
+        }
+      }
+
+      // Start searching from the root content
+      if (data.containsKey("result")) {
+        recursiveSearch(data["result"]);
+      }
+
+      print("Matched Files: $matchedFiles");
+      print("Matched Folders: $matchedFolders");
+    }
+
+    void performSearch(String query) async {
+      final response = await http.get(
+        Uri.parse('$baseURL/folder/list2?page=1&per_page=25&fld_id=${visitedFolderIDs.last.first}&sess_id=${mainFeature.sessionId}'),
+      );
+
+      if (response.statusCode == 200) {
+        var data = jsonDecode(utf8.decode(response.bodyBytes));
+        searchInData(data, query);
+      } else {
+        print('Failed to load folders and files');
+      }
+    }
+
+    void openSearchDialog() {
+      TextEditingController searchController = TextEditingController();
+
+      showDialog(
+        context: context,
+        builder: (context) {
+          return AlertDialog(
+            title: Text("Search"),
+            content: TextField(
+              controller: searchController,
+              autofocus: true,
+              decoration: InputDecoration(
+                hintText: "Enter file or folder name...",
+                border: OutlineInputBorder(),
+                suffixIcon: IconButton(
+                  icon: Icon(Icons.clear),
+                  onPressed: () => searchController.clear(),
+                ),
+              ),
+              onSubmitted: (query) {
+                Navigator.pop(context);
+                performSearch(query);
+              },
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: Text("Cancel"),
+              ),
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                  performSearch(searchController.text);
+                },
+                child: Text("Search"),
+              ),
+            ],
+          );
+        },
+      );
+    }
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -1361,6 +1454,10 @@ class _MyFilesPageState extends State<MyFilesPage> {
         ),
         actions: [
           if (!selectionMode) ...[
+            IconButton(
+              icon: Icon(Icons.search, color: Colors.blue),
+              onPressed: () => openSearchDialog(),
+            ),
             IconButton(
               icon: Icon(Icons.sort, color: Colors.blue),
               onPressed: () {
@@ -3551,6 +3648,92 @@ class _TransferState extends State<Transfer> {
 
 }
 
+class MyAccount extends StatefulWidget {
+  final MainFeature mainFeature;
+  MyAccount({required this.mainFeature});
+
+  @override
+  _MyAccountState createState() => _MyAccountState(mainFeature: mainFeature);
+}
+
+class _MyAccountState extends State<MyAccount> {
+  final MainFeature mainFeature;
+  dynamic userInfo = {};
+
+  _MyAccountState({required this.mainFeature});
+
+  @override
+  void initState() {
+    super.initState();
+    getUserInfo();
+  }
+
+  Future<void> getUserInfo() async {
+    setState(() {
+      userInfo = mainFeature.userInfo;
+    });
+  }
+
+  Widget build(BuildContext context) {
+    // Sample data
+    String email = userInfo['email'];
+    String accountType = userInfo['utype'] == "prem" ? "Premium" : "Standard";
+    double usedSpace = double.parse(userInfo['storage_used']) * 100;
+    
+    return Scaffold(
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        title: Text('My Account', style: TextStyle(color: Colors.black)),
+        iconTheme: IconThemeData(color: Colors.black),
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(20.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text("Email:", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            SizedBox(height: 5),
+            Text(email, style: TextStyle(fontSize: 16)),
+            SizedBox(height: 20),
+            
+            Text("Account Type:", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            SizedBox(height: 5),
+            Text(accountType, style: TextStyle(fontSize: 16, color: accountType == "Premium" ? Colors.green : Colors.red)),
+            SizedBox(height: 20),
+            
+            Text("Disk Usage:", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            SizedBox(height: 5),
+            Stack(
+              children: [
+                Container(
+                  width: double.infinity,
+                  height: 20,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(10),
+                    color: Colors.grey[300],
+                  ),
+                ),
+                Container(
+                  width: MediaQuery.of(context).size.width * (usedSpace / 100),
+                  height: 20,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(10),
+                    color: Colors.blue,
+                  ),
+                ),
+              ],
+            ),
+            SizedBox(height: 5),
+            Text("$usedSpace% occupied", style: TextStyle(fontSize: 14)),
+          ],
+        ),
+      ),
+    );
+  }
+
+}
+
 class VideoPlayerScreen extends StatefulWidget {
   final File videoFile;
   VideoPlayerScreen({required this.videoFile});
@@ -3619,6 +3802,7 @@ class MainFeature {
   bool fromToday = false;
   DateTime lastBackupDate = DateTime.now();
   int lastScanCount = -1;
+  dynamic userInfo = {};
 
   Future<void> initState() async {
     if (isFirstCall) {
@@ -3626,6 +3810,7 @@ class MainFeature {
       await _initializeServerUrl();
       await _loadSyncOrders();
       _infinitCycling(); 
+      _getUserInfo();
     }
     isFirstCall = false;
   }
@@ -3753,6 +3938,25 @@ class MainFeature {
       }
     } catch (e) {
       print("Error fetching upload server: $e");
+    }
+  }
+
+  Future<void> _getUserInfo() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseURL/account/info?sess_id=$sessionId'),
+      );
+
+      if (response.statusCode == 200) {
+        var data = jsonDecode(response.body);
+        userInfo = data['result'];
+      } else {
+        print("Failed to get user info: ${response.reasonPhrase}");
+        userInfo = "";
+      }
+    } catch (e) {
+      print("Error fetching user info: $e");
+        userInfo = "";
     }
   }
 
