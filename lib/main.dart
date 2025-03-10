@@ -406,7 +406,7 @@ class _MainPageState extends State<MainPage> {
       case 3:
         return MyAccount(mainFeature: mainFeature,);
       default:
-        return MyFilesPage(mainFeature: mainFeature,);
+        return OffLine(mainFeature: mainFeature,);
     }
   }
 
@@ -3732,6 +3732,58 @@ class _MyAccountState extends State<MyAccount> {
     );
   }
 
+}
+
+class OffLine extends StatefulWidget {
+  final MainFeature mainFeature;
+  OffLine({required this.mainFeature});
+
+  @override
+  _OffLineState createState() => _OffLineState(mainFeature: mainFeature);
+}
+
+class _OffLineState extends State<OffLine> {
+  final MainFeature mainFeature;
+
+  _OffLineState({required this.mainFeature});
+
+  @override
+  void initState() {
+    super.initState();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.white,
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(20.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Icon(Icons.wifi_off, size: 80, color: Colors.grey),
+              SizedBox(height: 20),
+              Text(
+                "No network, please connect to the internet then reopen the app.",
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 16, color: Colors.black87),
+              ),
+              SizedBox(height: 20),
+              ElevatedButton(
+                onPressed: () {
+                  // You can add logic to check connectivity here
+                  Navigator.pop(context);
+                },
+                child: Text("Retry"),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class VideoPlayerScreen extends StatefulWidget {
