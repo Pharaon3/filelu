@@ -396,6 +396,7 @@ class _MainPageState extends State<MainPage> {
 
   // Display different pages based on navigation selection
   Widget _getPageContent() {
+    if (!mainFeature.isFirstCall && mainFeature.userInfo == {}) return OffLine(mainFeature: mainFeature,);
     switch (_tabSelected) {
       case 0:
         return MyFilesPage(mainFeature: mainFeature,);
@@ -547,7 +548,6 @@ class _MyFilesPageState extends State<MyFilesPage> {
       isLoading = true;
       _isPlusButtonVisible = false;
     });
-    await mainFeature.initState();
     final response = await http.get(
       Uri.parse('$baseURL/files/deleted?sess_id=${mainFeature.sessionId}'),
     );
@@ -1336,55 +1336,28 @@ class _MyFilesPageState extends State<MyFilesPage> {
       );
     }
     
-    void searchInData(Map<String, dynamic> data, String query) {
-      List<String> matchedFiles = [];
-      List<String> matchedFolders = [];
-
-      void recursiveSearch(Map<String, dynamic> folderContent) {
-        // Search in files
-        if (folderContent.containsKey("files")) {
-          folderContent["files"].keys.forEach((fileName) {
-            if (fileName.toLowerCase().contains(query.toLowerCase())) {
-              matchedFiles.add(fileName);
-            }
-          });
-        }
-
-        // Search in folders
-        if (folderContent.containsKey("folders")) {
-          List<dynamic> folders = folderContent["folders"];
-          for (var folder in folders) {
-            if (folder["folder_name"].toLowerCase().contains(query.toLowerCase())) {
-              matchedFolders.add(folder["folder_name"]);
-            }
-            // Recursively search inside subfolders
-            if (folder.containsKey("content")) {
-              recursiveSearch(folder["content"]);
-            }
-          }
-        }
-      }
-
-      // Start searching from the root content
-      if (data.containsKey("result")) {
-        recursiveSearch(data["result"]);
-      }
-
-      print("Matched Files: $matchedFiles");
-      print("Matched Folders: $matchedFolders");
-    }
-
     void performSearch(String query) async {
+    setState(() {
+      isLoading = true;
+      _isPlusButtonVisible = false;
+    });
       final response = await http.get(
-        Uri.parse('$baseURL/folder/list2?page=1&per_page=25&fld_id=${visitedFolderIDs.last.first}&sess_id=${mainFeature.sessionId}'),
+        Uri.parse('$baseURL/folder/list?search=$query&sess_id=${mainFeature.sessionId}'),
       );
 
       if (response.statusCode == 200) {
         var data = jsonDecode(utf8.decode(response.bodyBytes));
-        searchInData(data, query);
+        setState(() {
+          folders = data['result']['folders'];
+          files = data['result']['files'];
+        });
       } else {
         print('Failed to load folders and files');
       }
+    setState(() {
+      isLoading = false;
+      _isPlusButtonVisible = true;
+    });
     }
 
     void openSearchDialog() {
