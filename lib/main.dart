@@ -457,6 +457,7 @@ class _MyFilesPageState extends State<MyFilesPage> {
   List<dynamic> folders = [];
   List<dynamic> files = [];
   List<dynamic> deletedFiles = [];
+  List<dynamic> deletedFolders = [];
   List<dynamic> visitedFolderIDs = [[0, '/'], [0, '/']];
   List<dynamic> copiedFileFolders = [];
   int copyStatus = 0; // 0: empty, 1: copied 2: moved
@@ -519,28 +520,43 @@ class _MyFilesPageState extends State<MyFilesPage> {
 
   // Fetch files and folders using the API
   Future<void> _fetchFilesAndFolders(fldId) async {
-    setState(() {
-      isLoading = true;
-      _isPlusButtonVisible = false;
-    });
-    await mainFeature.initState();
-    final response = await http.get(
-      Uri.parse('$baseURL/folder/list?fld_id=${fldId.toString()}&sess_id=${mainFeature.sessionId}'),
-    );
-
-    if (response.statusCode == 200) {
-      var data = jsonDecode(utf8.decode(response.bodyBytes));
+    if (mainFeature.cachedFolderInfo.containsKey(fldId.toString())) {
+      dynamic data = mainFeature.cachedFolderInfo[fldId.toString()];
       setState(() {
-        folders = data['result']['folders'];
-        files = data['result']['files'];
+        folders = data['folders'];
+        files = data['files'];
       });
     } else {
-      print('Failed to load folders and files');
+      setState(() {
+        isLoading = true;
+        _isPlusButtonVisible = false;
+      });
+      await mainFeature.initState();
+      final response = await http.get(
+        Uri.parse('$baseURL/folder/list?fld_id=${fldId.toString()}&sess_id=${mainFeature.sessionId}'),
+      );
+
+      if (response.statusCode == 200) {
+        var data = jsonDecode(utf8.decode(response.bodyBytes));
+        setState(() {
+          folders = data['result']['folders'];
+          files = data['result']['files'];
+          mainFeature.cachedFolderInfo = {
+            ...mainFeature.cachedFolderInfo,
+            fldId.toString(): {
+              "folders" : folders,
+              "files" : files,
+            }
+          };
+        });
+      } else {
+        print('Failed to load folders and files');
+      }
+      setState(() {
+        isLoading = false;
+        _isPlusButtonVisible = true;
+      });
     }
-    setState(() {
-      isLoading = false;
-      _isPlusButtonVisible = true;
-    });
   }
 
   Future<void> _fetchTrash() async {
@@ -549,13 +565,14 @@ class _MyFilesPageState extends State<MyFilesPage> {
       _isPlusButtonVisible = false;
     });
     final response = await http.get(
-      Uri.parse('$baseURL/files/deleted?sess_id=${mainFeature.sessionId}'),
+      Uri.parse('$baseURL/folder/recycle?sess_id=${mainFeature.sessionId}'),
     );
 
     if (response.statusCode == 200) {
       var data = jsonDecode(utf8.decode(response.bodyBytes));
       setState(() {
-        deletedFiles = data['result'];
+        deletedFiles = data['result']['files'];
+        deletedFolders = data['result']['folders'];
       });
     } else {
       print('Failed to load folders and files');
@@ -928,7 +945,7 @@ class _MyFilesPageState extends State<MyFilesPage> {
                                                 ),
                                               ),
                                             if (isFolder)
-                                              Positioned(
+                                              if(item["total_files"].toString() != "null") Positioned(
                                                 top: 6,
                                                 left: 6,
                                                 child: Container(
@@ -1113,7 +1130,7 @@ class _MyFilesPageState extends State<MyFilesPage> {
                                       clipBehavior: Clip.none,
                                       children: [
                                         Icon(folder['name'] == 'Trash' ? Icons.delete : Icons.folder, size: 40, color: isSelected ? Colors.cyan : Colors.blue),
-                                        Positioned(
+                                        if(folder["total_files"].toString() != "null") Positioned(
                                           top: -5,
                                           left: -5,
                                           child: Container(
@@ -1732,9 +1749,8 @@ class _MyFilesPageState extends State<MyFilesPage> {
   void _openCloudFolder(BuildContext context, dynamic item) async {
     if (item['name'] == 'Trash') {
       setState(() {
-        folders = [];
+        folders = deletedFolders;
         files = deletedFiles;
-        visitedFolderIDs.add(['', 'Trash']);
       });
     } else {
       try {
@@ -1749,6 +1765,7 @@ class _MyFilesPageState extends State<MyFilesPage> {
   Future<void> _refreshPage() async {
     dynamic item = visitedFolderIDs.last;
     try {
+      mainFeature.cachedFolderInfo.remove(item.first.toString());
       await _fetchFilesAndFolders(item.first);
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
@@ -3818,6 +3835,7 @@ class MainFeature {
   bool isFirstCall = true;
   int currentUploadingItemIndex = 0;
   int currentDownloadingItemIndex = 0;
+  dynamic cachedFolderInfo = {};
   
   List<SyncOrder> syncOrders = [];
   List<List<String>> syncedFiles = [];
