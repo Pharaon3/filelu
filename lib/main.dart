@@ -396,7 +396,6 @@ class _MainPageState extends State<MainPage> {
 
   // Display different pages based on navigation selection
   Widget _getPageContent() {
-    if (!mainFeature.isFirstCall && mainFeature.userInfo == {}) return OffLine(mainFeature: mainFeature,);
     switch (_tabSelected) {
       case 0:
         return MyFilesPage(mainFeature: mainFeature,);
@@ -846,7 +845,7 @@ class _MyFilesPageState extends State<MyFilesPage> {
       }
     }
 
-    Widget gridView() {
+    Widget gridView(BuildContext listContext) {
       return Column(
         children: [
           // Scrollable Content with RefreshIndicator
@@ -891,7 +890,7 @@ class _MyFilesPageState extends State<MyFilesPage> {
                                       toggleSelectionMode(item);
                                     } else {
                                       item.containsKey('file_code')
-                                          ? openCloudFile(context, item['file_code'], item['name'])
+                                          ? openCloudFile(listContext, item['file_code'], item['name'])
                                           : _openCloudFolder(context, item);
                                     }
                                   },
@@ -1088,7 +1087,7 @@ class _MyFilesPageState extends State<MyFilesPage> {
       );
     }
 
-    Widget listView() {
+    Widget listView(BuildContext listContext) {
       return Column(
         children: [
           // Scrollable Content with RefreshIndicator
@@ -1200,7 +1199,7 @@ class _MyFilesPageState extends State<MyFilesPage> {
                                     if (selectionMode) {
                                       toggleSelectionMode(file);
                                     } else {
-                                      openCloudFile(context, file['file_code'], file['name']);
+                                      openCloudFile(listContext, file['file_code'], file['name']);
                                     }
                                   },
                                   child: ListTile(
@@ -1614,7 +1613,7 @@ class _MyFilesPageState extends State<MyFilesPage> {
           : Container(),
       body: isLoading
           ? Center(child: CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(Colors.blue)))
-          : isGridView ? gridView() : listView(),
+          : isGridView ? gridView(context) : listView(context),
     );
 
   }
@@ -1795,9 +1794,7 @@ class _MyFilesPageState extends State<MyFilesPage> {
 
         // Check file type and open it
         if (['txt'].contains(fileExtension)) {
-          print("file: $file");
-          String content = await file.readAsString();
-          _showTextFile(context, content);
+          _showTextFile(context, file);
         } else if (['png', 'jpg', 'jpeg', 'gif'].contains(fileExtension)) {
           _showImageFile(context, file);
         } else if (['mp3', 'wav', 'aac'].contains(fileExtension)) {
@@ -1822,7 +1819,8 @@ class _MyFilesPageState extends State<MyFilesPage> {
   }
 
   // Show text file content
-  void _showTextFile(BuildContext context, String content) {
+  void _showTextFile(BuildContext context, File file) async {
+    String content = await file.readAsString();
     print("content: $content");
     showDialog(
       context: context,
