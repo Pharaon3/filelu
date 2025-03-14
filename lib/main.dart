@@ -14,6 +14,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:intl/intl.dart';
 import 'dart:isolate';
 import 'dart:async';
+import 'package:open_file/open_file.dart';
 
 Map<int, http.StreamedResponse?> activeDownloads = {}; // Stores active requests
 const String baseURL = "https://filelu.com/app";
@@ -394,7 +395,6 @@ class _MainPageState extends State<MainPage> {
     });
   }
 
-  // Display different pages based on navigation selection
   Widget _getPageContent() {
     switch (_tabSelected) {
       case 0:
@@ -412,6 +412,7 @@ class _MainPageState extends State<MainPage> {
 
   @override
   Widget build(BuildContext context) {
+    if (mainFeature.isOffline) return OffLine(mainFeature: mainFeature);
     return Scaffold(
       body: _getPageContent(),
       bottomNavigationBar: BottomNavigationBar(
@@ -530,12 +531,8 @@ class _MyFilesPageState extends State<MyFilesPage> {
         isLoading = true;
         _isPlusButtonVisible = false;
       });
-      await mainFeature.initState();
-      final response = await http.get(
-        Uri.parse('$baseURL/folder/list?fld_id=${fldId.toString()}&sess_id=${mainFeature.sessionId}'),
-      );
-
-      if (response.statusCode == 200) {
+        await mainFeature.initState();
+        final response = await mainFeature.getAPICall('$baseURL/folder/list?fld_id=${fldId.toString()}&sess_id=${mainFeature.sessionId}');
         var data = jsonDecode(utf8.decode(response.bodyBytes));
         setState(() {
           folders = data['result']['folders'];
@@ -548,9 +545,6 @@ class _MyFilesPageState extends State<MyFilesPage> {
             }
           };
         });
-      } else {
-        print('Failed to load folders and files');
-      }
       setState(() {
         isLoading = false;
         _isPlusButtonVisible = true;
@@ -563,19 +557,12 @@ class _MyFilesPageState extends State<MyFilesPage> {
       isLoading = true;
       _isPlusButtonVisible = false;
     });
-    final response = await http.get(
-      Uri.parse('$baseURL/folder/recycle?sess_id=${mainFeature.sessionId}'),
-    );
-
-    if (response.statusCode == 200) {
-      var data = jsonDecode(utf8.decode(response.bodyBytes));
-      setState(() {
-        deletedFiles = data['result']['files'];
-        deletedFolders = data['result']['folders'];
-      });
-    } else {
-      print('Failed to load folders and files');
-    }
+    final response = await mainFeature.getAPICall('$baseURL/folder/recycle?sess_id=${mainFeature.sessionId}');
+    var data = jsonDecode(utf8.decode(response.bodyBytes));
+    setState(() {
+      deletedFiles = data['result']['files'];
+      deletedFolders = data['result']['folders'];
+    });
     setState(() {
       isLoading = false;
       _isPlusButtonVisible = true;
@@ -583,17 +570,10 @@ class _MyFilesPageState extends State<MyFilesPage> {
   }
 
   Future<String> _getDownloadLink(fileCode) async {
-    final response = await http.get(
-      Uri.parse('$baseURL/file/direct_link?file_code=$fileCode&sess_id=${mainFeature.sessionId}')
-    );
-
-    if (response.statusCode == 200) {
-      var data = jsonDecode(response.body);
-      Uri.parse(data['result']['url']);
-      return data['result']['url'];
-    } else {
-      return "cannot get download link";
-    }
+    final response = await mainFeature.getAPICall('$baseURL/file/direct_link?file_code=$fileCode&sess_id=${mainFeature.sessionId}');
+    var data = jsonDecode(response.body);
+    Uri.parse(data['result']['url']);
+    return data['result']['url'];
   }
 
   Future<String> getDownloadDirectory() async {
@@ -1252,7 +1232,24 @@ class _MyFilesPageState extends State<MyFilesPage> {
                                           ),
                                       ],
                                     ),
-                                    title: Text((file['only_me'].toString() == "1") ? "${file['name']} (Only Me)" : file['name']),
+                                    title: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          file['name'],
+                                          style: TextStyle(fontWeight: FontWeight.bold),
+                                        ),
+                                        SizedBox(height: 4), // Space between the file name and the additional data
+                                        Text(
+                                          file['size'] ?? 'Size not available',  // Replace 'size' with the actual field you want to display
+                                          style: TextStyle(color: Colors.grey, fontSize: 12),
+                                        ),
+                                        Text(
+                                          file['uploaded'] ?? 'Date not available',  // Replace 'modified_date' with the actual field you want to display
+                                          style: TextStyle(color: Colors.grey, fontSize: 12),
+                                        ),
+                                      ],
+                                    ),
                                     trailing: IconButton(
                                       icon: Icon(
                                         selectionMode
@@ -1739,6 +1736,7 @@ class _MyFilesPageState extends State<MyFilesPage> {
               }
             }
           },
+
         );
       },
     );
@@ -1793,16 +1791,16 @@ class _MyFilesPageState extends State<MyFilesPage> {
         String fileExtension = fileName.split('.').last.toLowerCase();
 
         // Check file type and open it
-        if (['txt'].contains(fileExtension)) {
+        if (['txt',].contains(fileExtension)) {
           _showTextFile(context, file);
-        } else if (['png', 'jpg', 'jpeg', 'gif'].contains(fileExtension)) {
-          _showImageFile(context, file);
-        } else if (['mp3', 'wav', 'aac'].contains(fileExtension)) {
+        } else if (['mp3', 'wav', 'aac', 'ogg', 'm4a', 'flac', 'wma'].contains(fileExtension)) {
           _playAudioFile(context, file);
-        } else if (['mp4', 'avi', 'mov'].contains(fileExtension)) {
+        } else if (['mp4', 'mov', 'mkv', 'avi', 'flv', 'wmv', 'webm'].contains(fileExtension)) {
           _playVideoFile(context, file);
+        } else if (['jpg', 'jpeg', 'png', 'gif', 'bmp', 'svg', 'tiff', 'tif', 'webp'].contains(fileExtension)) {
+          _showImageFile(context, file);
         } else {
-          print("Unsupported file format: $fileExtension");
+          _openDocumentFile(context, file);
         }
       } else {
         print("Failed to download file. Status Code: ${response.statusCode}");
@@ -1815,6 +1813,22 @@ class _MyFilesPageState extends State<MyFilesPage> {
       setState(() {
         isLoading = false;
       });
+    }
+  }
+
+  Future<void> _openDocumentFile(BuildContext context, File file) async {
+    String filePath = file.path;
+    String fileExtension = filePath.split('.').last.toLowerCase();
+
+    // Attempt to open the document
+    final result = await OpenFile.open(filePath);
+
+    // Handle the result
+    if (result.message != 'Success') {
+      // Show an error message if the file could not be opened
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to open file: ${result.message}')),
+      );
     }
   }
 
@@ -2068,25 +2082,11 @@ class _MyFilesPageState extends State<MyFilesPage> {
     for(dynamic copiedFileFolder in copiedFileFolders){
       if (copyStatus == 1 && copiedFileFolder.containsKey('file_code')) {  // copy file.
         String fileCode = copiedFileFolder['file_code'];
-        final response = await http.get(
-          Uri.parse('$baseURL/file/clone?file_code=$fileCode&sess_id=${mainFeature.sessionId}'),
-        );
-
-        if (response.statusCode == 200) {
-          var data = jsonDecode(response.body);
-          String clonedFileCode = data['result']['filecode'];
-          final response1 = await http.get(
-            Uri.parse('$baseURL/file/set_folder?file_code=$clonedFileCode&fld_id=$folderID&sess_id=${mainFeature.sessionId}'),
-          );
-          if (response1.statusCode == 200) {
-            print('Successfully copied.');
-          } else {
-            print("Failed to paste file, it's cloned to the root directory.");
-          }
-        } else {
-          print('Failed to copy file');
-          return;
-        }
+        final response = await mainFeature.getAPICall('$baseURL/file/clone?file_code=$fileCode&sess_id=${mainFeature.sessionId}');
+        var data = jsonDecode(response.body);
+        String clonedFileCode = data['result']['filecode'];
+        await mainFeature.getAPICall('$baseURL/file/set_folder?file_code=$clonedFileCode&fld_id=$folderID&sess_id=${mainFeature.sessionId}');
+        print('Successfully copied.');
       } else if (copyStatus == 2 && copiedFileFolder.containsKey('file_code')) { // move file.
         String fileCode = copiedFileFolder['file_code'];
           final response = await http.get(
@@ -2099,34 +2099,17 @@ class _MyFilesPageState extends State<MyFilesPage> {
           }
       } else if (copyStatus == 1 && !copiedFileFolder.containsKey('file_code')) { // copy folder.
         String copyFolderID = copiedFileFolder['fld_id'].toString();
-        final response = await http.get(
-          Uri.parse('$baseURL/folder/copy?fld_id=$copyFolderID&sess_id=${mainFeature.sessionId}'),
-        );
-
-        if (response.statusCode == 200) {
-          var data = jsonDecode(response.body);
-          String clonedFolderID = data['result']['fld_id'].toString();
-          final response1 = await http.get(
-            Uri.parse('$baseURL/folder/move?fld_id=$clonedFolderID&dest_fld_id=$folderID&sess_id=${mainFeature.sessionId}'),
-          );
-          if (response1.statusCode == 200) {
-            String copiedFolderID = jsonDecode(response.body)['result']['fld_id'].toString();
-            mainFeature.renameFile(jsonDecode(response.body)['result'], copiedFileFolder['name']);
-            print('Successfully copied.');
-          } else {
-            print("Failed to paste folder, it's cloned to the root directory.");
-          }
-        }
+        final response = await mainFeature.getAPICall('$baseURL/folder/copy?fld_id=$copyFolderID&sess_id=${mainFeature.sessionId}');
+        var data = jsonDecode(response.body);
+        String clonedFolderID = data['result']['fld_id'].toString();
+        final response1 = await mainFeature.getAPICall('$baseURL/folder/move?fld_id=$clonedFolderID&dest_fld_id=$folderID&sess_id=${mainFeature.sessionId}');
+        String copiedFolderID = jsonDecode(response.body)['result']['fld_id'].toString();
+        mainFeature.renameFile(jsonDecode(response.body)['result'], copiedFileFolder['name']);
+        print('Successfully copied.');
       } else if (copyStatus == 2 && !copiedFileFolder.containsKey('file_code')) { // move folder.
         String moveFolderID = copiedFileFolder['fld_id'].toString();
-        final response1 = await http.get(
-          Uri.parse('$baseURL/folder/move?fld_id=$moveFolderID&dest_fld_id=$folderID&sess_id=${mainFeature.sessionId}'),
-        );
-        if (response1.statusCode == 200) {
-          print('Successfully moved.');
-        } else {
-          print("Failed to move.");
-        }
+        final response1 = await mainFeature.getAPICall('$baseURL/folder/move?fld_id=$moveFolderID&dest_fld_id=$folderID&sess_id=${mainFeature.sessionId}');
+        print('Successfully moved.');
       } else {
         print('Nothing to paste.');
       }
@@ -2149,17 +2132,9 @@ class _MyFilesPageState extends State<MyFilesPage> {
 
   // Fetch files and folders using the API
   Future<dynamic> fetchFilesAndFolders(fldId) async {
-    final response = await http.get(
-      Uri.parse('$baseURL/folder/list?fld_id=${fldId.toString()}&sess_id=${mainFeature.sessionId}'),
-    );
-
-    if (response.statusCode == 200) {
-      var data = jsonDecode(response.body);
-      return data['result'];
-    } else {
-      print('Failed to load folders and files');
-      return [];
-    }
+    final response = await mainFeature.getAPICall('$baseURL/folder/list?fld_id=${fldId.toString()}&sess_id=${mainFeature.sessionId}');
+    var data = jsonDecode(response.body);
+    return data['result'];
   }
 
   void _showConfigMenu() {
@@ -3152,38 +3127,24 @@ class _SyncPageState extends State<SyncPage> {
   }
 
   Future<String> getFolderID(String folderName, String parentFolderID) async {
-    final response = await http.get(
-      Uri.parse('$baseURL/folder/list?fld_id=$parentFolderID&sess_id=${mainFeature.sessionId}'),
-    );
-    if (response.statusCode == 200) {
-      var data = jsonDecode(response.body);
-      List<String> cloudFolders = List<String>.from(data['result']['folders'].map((file) => file['name']));
-      List<String> cloudFolderCodes = List<String>.from(data['result']['folders'].map((file) => file['fld_id'].toString()));
-      for (int i = 0; i < cloudFolders.length; i ++) {
-        if (cloudFolders[i] == folderName) {
-          return cloudFolderCodes[i];
-        }
+    final response = await mainFeature.getAPICall('$baseURL/folder/list?fld_id=$parentFolderID&sess_id=${mainFeature.sessionId}');
+    var data = jsonDecode(response.body);
+    List<String> cloudFolders = List<String>.from(data['result']['folders'].map((file) => file['name']));
+    List<String> cloudFolderCodes = List<String>.from(data['result']['folders'].map((file) => file['fld_id'].toString()));
+    for (int i = 0; i < cloudFolders.length; i ++) {
+      if (cloudFolders[i] == folderName) {
+        return cloudFolderCodes[i];
       }
     }
-    final response1 = await http.get(
-      Uri.parse('$baseURL/folder/create?parent_id=$parentFolderID&name=$folderName&sess_id=${mainFeature.sessionId}'),
-    );
-    if (response1.statusCode == 200) {
-      var data = jsonDecode(response1.body);
-      return data['result']['fld_id'].toString();
-    }
-    return "";
+    final response1 = await mainFeature.getAPICall('$baseURL/folder/create?parent_id=$parentFolderID&name=$folderName&sess_id=${mainFeature.sessionId}');
+    var data1 = jsonDecode(response1.body);
+    return data1['result']['fld_id'].toString();
   }
 
   Future<String> createCloudFolder(String localFolder, String parentId) async {
-    final response = await http.get(
-      Uri.parse('$baseURL/folder/create?parent_id=$parentId&name=$localFolder&sess_id=${mainFeature.sessionId}')
-    );
-    if (response.statusCode == 200) {
-      var data = jsonDecode(response.body);
-      return data['result']['fld_id'].toString();
-    }
-    return "";
+    final response = await mainFeature.getAPICall('$baseURL/folder/create?parent_id=$parentId&name=$localFolder&sess_id=${mainFeature.sessionId}');
+    var data = jsonDecode(response.body);
+    return data['result']['fld_id'].toString();
   }
 
   Future<void> createFolderIfNotExists(String path) async {
@@ -3381,17 +3342,13 @@ class _UploadPageState extends State<UploadPage> {
   }
   
   Future<String> getFolderID(String folderName, String parentFolderID) async {
-    final response = await http.get(
-      Uri.parse('$baseURL/folder/list?fld_id=$parentFolderID&sess_id=${mainFeature.sessionId}'),
-    );
-    if (response.statusCode == 200) {
-      var data = jsonDecode(response.body);
-      List<String> cloudFolders = List<String>.from(data['result']['folders'].map((file) => file['name']));
-      List<String> cloudFolderCodes = List<String>.from(data['result']['folders'].map((file) => file['fld_id'].toString()));
-      for (int i = 0; i < cloudFolders.length; i ++) {
-        if (cloudFolders[i] == folderName) {
-          return cloudFolderCodes[i];
-        }
+    final response = await mainFeature.getAPICall('$baseURL/folder/list?fld_id=$parentFolderID&sess_id=${mainFeature.sessionId}');
+    var data = jsonDecode(response.body);
+    List<String> cloudFolders = List<String>.from(data['result']['folders'].map((file) => file['name']));
+    List<String> cloudFolderCodes = List<String>.from(data['result']['folders'].map((file) => file['fld_id'].toString()));
+    for (int i = 0; i < cloudFolders.length; i ++) {
+      if (cloudFolders[i] == folderName) {
+        return cloudFolderCodes[i];
       }
     }
     return "";
@@ -3425,14 +3382,9 @@ class _UploadPageState extends State<UploadPage> {
   }
 
   Future<String> createCloudFolder(String localFolder, String parentId) async {
-    final response = await http.get(
-      Uri.parse('$baseURL/folder/create?parent_id=$parentId&name=$localFolder&sess_id=${mainFeature.sessionId}')
-    );
-    if (response.statusCode == 200) {
-      var data = jsonDecode(response.body);
-      return data['result']['fld_id'].toString();
-    }
-    return "";
+    final response = await mainFeature.getAPICall('$baseURL/folder/create?parent_id=$parentId&name=$localFolder&sess_id=${mainFeature.sessionId}');
+    var data = jsonDecode(response.body);
+    return data['result']['fld_id'].toString();
   }
 
   @override
@@ -3761,7 +3713,8 @@ class _OffLineState extends State<OffLine> {
               SizedBox(height: 20),
               ElevatedButton(
                 onPressed: () {
-                  // You can add logic to check connectivity here
+                  mainFeature.isFirstCall = true;
+                  mainFeature.initState();
                   Navigator.pop(context);
                 },
                 child: Text("Retry"),
@@ -3834,6 +3787,7 @@ class MainFeature {
   int currentUploadingItemIndex = 0;
   int currentDownloadingItemIndex = 0;
   dynamic cachedFolderInfo = {};
+  bool isOffline = false;
   
   List<SyncOrder> syncOrders = [];
   List<List<String>> syncedFiles = [];
@@ -3847,6 +3801,7 @@ class MainFeature {
 
   Future<void> initState() async {
     if (isFirstCall) {
+      isOffline = false;
       await getSessionId();
       await _initializeServerUrl();
       await _loadSyncOrders();
@@ -3854,6 +3809,21 @@ class MainFeature {
       _getUserInfo();
     }
     isFirstCall = false;
+  }
+
+  dynamic getAPICall(String url) async {
+    try {
+      final response = await http.get(Uri.parse(url));
+
+      if (response.statusCode == 200) {
+        return response;
+      } else if (response.statusCode == 404) {
+        isOffline = true;
+      }
+    } catch (e) {
+      print('API call failed: $e');
+      isOffline = true;
+    }
   }
 
   Future<void> getSessionId() async {
@@ -3967,37 +3937,24 @@ class MainFeature {
 
   Future<void> _initializeServerUrl() async {
     try {
-      final response = await http.get(
-        Uri.parse('$baseURL/upload/server?sess_id=$sessionId'),
-      );
-
-      if (response.statusCode == 200) {
-        var data = jsonDecode(response.body);
-        serverUrl = data['result'];
-      } else {
-        print("Failed to get upload server: ${response.reasonPhrase}");
-      }
+      final response = await getAPICall('$baseURL/upload/server?sess_id=$sessionId');
+      var data = jsonDecode(response.body);
+      serverUrl = data['result'];
     } catch (e) {
+      isOffline = true;
       print("Error fetching upload server: $e");
     }
   }
 
   Future<void> _getUserInfo() async {
     try {
-      final response = await http.get(
-        Uri.parse('$baseURL/account/info?sess_id=$sessionId'),
-      );
-
-      if (response.statusCode == 200) {
-        var data = jsonDecode(response.body);
-        userInfo = data['result'];
-      } else {
-        print("Failed to get user info: ${response.reasonPhrase}");
-        userInfo = "";
-      }
+      final response = await getAPICall('$baseURL/account/info?sess_id=$sessionId');
+      var data = jsonDecode(response.body);
+      userInfo = data['result'];
     } catch (e) {
       print("Error fetching user info: $e");
-        userInfo = "";
+      isOffline = true;
+      userInfo = "";
     }
   }
 
@@ -4022,14 +3979,9 @@ class MainFeature {
 
     // Check if the file already exists on cloud
     List<String> cloudFiles = [];
-    final response = await http.get(
-      Uri.parse('$baseURL/folder/list?fld_id=$folderID&sess_id=$sessionId'),
-    );
-
-    if (response.statusCode == 200) {
-      var data = jsonDecode(response.body);
-      cloudFiles = List<String>.from(data['result']['files'].map((file) => file['name']));
-    }
+    final response = await getAPICall('$baseURL/folder/list?fld_id=$folderID&sess_id=$sessionId');
+    var data = jsonDecode(response.body);
+    cloudFiles = List<String>.from(data['result']['files'].map((file) => file['name']));
 
     if (cloudFiles.contains(filePath.split('/').last)) {
       uploadQueue[index]['isRemoved'] = true;
@@ -4080,11 +4032,13 @@ class MainFeature {
         return responseData[0]['file_code'];
       } else {
         print("Upload failed: ${response.reasonPhrase}");
+        isOffline = true;
         uploadQueue[index]['isRemoved'] = true;
       }
     } catch (e) {
       print("Upload error: $e");
       uploadQueue[index]['isRemoved'] = true;
+      isOffline = true;
     }
     return "went wrong";
   }
@@ -4107,17 +4061,12 @@ class MainFeature {
         .toList();
     }
     
-    final response = await http.get(
-      Uri.parse('$baseURL/folder/list?fld_id=$folderID&sess_id=$sessionId'),
-    );
-
-    if (response.statusCode == 200) {
-      var data = jsonDecode(response.body);
-      cloudFiles = List<String>.from(data['result']['files'].map((file) => file['name']));
-      cloudFileCodes = List<String>.from(data['result']['files'].map((file) => file['file_code']));
-      cloudFolders = List<String>.from(data['result']['folders'].map((file) => file['name']));
-      cloudFolderCodes = List<String>.from(data['result']['folders'].map((file) => file['fld_id'].toString()));
-    }
+    final response = await getAPICall('$baseURL/folder/list?fld_id=$folderID&sess_id=$sessionId');
+    var data = jsonDecode(response.body);
+    cloudFiles = List<String>.from(data['result']['files'].map((file) => file['name']));
+    cloudFileCodes = List<String>.from(data['result']['files'].map((file) => file['file_code']));
+    cloudFolders = List<String>.from(data['result']['folders'].map((file) => file['name']));
+    cloudFolderCodes = List<String>.from(data['result']['folders'].map((file) => file['fld_id'].toString()));
 
     for (String file in localFiles) {
       if (!cloudFiles.contains(file)) {
@@ -4143,35 +4092,30 @@ class MainFeature {
   }
 
   Future<void> moveFile(String fileCode, String folderID) async {
-    await http.get(Uri.parse('$baseURL/file/set_folder?file_code=$fileCode&fld_id=$folderID&sess_id=$sessionId'));
+    try {
+      await http.get(Uri.parse('$baseURL/file/set_folder?file_code=$fileCode&fld_id=$folderID&sess_id=$sessionId'));
+    } catch (e) {
+      isOffline = true;
+    }
   }
 
   Future<String> getFolderID(String folderName, String parentFolderID) async {
-    final response = await http.get(
-      Uri.parse('$baseURL/folder/list?fld_id=$parentFolderID&sess_id=$sessionId'),
-    );
-    if (response.statusCode == 200) {
-      var data = jsonDecode(response.body);
-      List<String> cloudFolders = List<String>.from(data['result']['folders'].map((folder) => folder['name']));
-      List<String> cloudFolderCodes = List<String>.from(data['result']['folders'].map((folder) => folder['fld_id'].toString()));
-      for (int i = 0; i < cloudFolders.length; i ++) {
-        if (cloudFolders[i] == folderName) {
-          return cloudFolderCodes[i];
-        }
+    final response = await getAPICall('$baseURL/folder/list?fld_id=$parentFolderID&sess_id=$sessionId');
+    var data = jsonDecode(response.body);
+    List<String> cloudFolders = List<String>.from(data['result']['folders'].map((folder) => folder['name']));
+    List<String> cloudFolderCodes = List<String>.from(data['result']['folders'].map((folder) => folder['fld_id'].toString()));
+    for (int i = 0; i < cloudFolders.length; i ++) {
+      if (cloudFolders[i] == folderName) {
+        return cloudFolderCodes[i];
       }
     }
     return "";
   }
 
   Future<String> createCloudFolder(String localFolder, String parentId) async {
-    final response = await http.get(
-      Uri.parse('$baseURL/folder/create?parent_id=$parentId&name=$localFolder&sess_id=$sessionId')
-    );
-    if (response.statusCode == 200) {
-      var data = jsonDecode(response.body);
-      return data['result']['fld_id'].toString();
-    }
-    return "";
+    final response = await getAPICall('$baseURL/folder/create?parent_id=$parentId&name=$localFolder&sess_id=$sessionId');
+    var data = jsonDecode(response.body);
+    return data['result']['fld_id'].toString();
   }
 
   Future<String> getDownloadDirectory() async {
@@ -4201,17 +4145,10 @@ class MainFeature {
   }
 
   Future<String> _getDownloadLink(fileCode) async {
-    final response = await http.get(
-      Uri.parse('$baseURL/file/direct_link?file_code=$fileCode&sess_id=$sessionId')
-    );
-
-    if (response.statusCode == 200) {
-      var data = jsonDecode(response.body);
-      Uri.parse(data['result']['url']);
-      return data['result']['url'];
-    } else {
-      return "cannot get download link";
-    }
+    final response = await getAPICall('$baseURL/file/direct_link?file_code=$fileCode&sess_id=$sessionId');
+    var data = jsonDecode(response.body);
+    Uri.parse(data['result']['url']);
+    return data['result']['url'];
   }
 
   Future<void> downloadFile(int index) async {
@@ -4326,17 +4263,9 @@ class MainFeature {
   }
 
   Future<dynamic> fetchFilesAndFolders(fldId) async {
-    final response = await http.get(
-      Uri.parse('$baseURL/folder/list?fld_id=${fldId.toString()}&sess_id=$sessionId'),
-    );
-
-    if (response.statusCode == 200) {
-      var data = jsonDecode(response.body);
-      return data['result'];
-    } else {
-      print('Failed to load folders and files');
-      return [];
-    }
+    final response = await getAPICall('$baseURL/folder/list?fld_id=${fldId.toString()}&sess_id=$sessionId');
+    var data = jsonDecode(response.body);
+    return data['result'];
   }
 
   Future<void> removeCloudItem(dynamic item) async {
@@ -4347,6 +4276,7 @@ class MainFeature {
       );
       if (response.statusCode == 200) {
       } else {
+        isOffline = true;
       }
     } else {
       String folderID = item['fld_id'].toString();
@@ -4363,6 +4293,7 @@ class MainFeature {
       );
       if (response.statusCode == 200) {
       } else {
+        isOffline = true;
       }
     } else {
       // String folderID = item['fld_id'].toString();
@@ -4378,6 +4309,7 @@ class MainFeature {
       );
       if (response.statusCode == 200) {
       } else {
+        isOffline = true;
       }
     } else {
       // String folderID = item['fld_id'].toString();
@@ -4386,11 +4318,7 @@ class MainFeature {
   }
 
   Future<void> removeFolder(String folderID) async {
-    final response = await http.get(
-      Uri.parse('$baseURL/folder/delete?fld_id=$folderID&sess_id=$sessionId'),
-    );
-    if (response.statusCode == 200) {
-    }
+    await getAPICall('$baseURL/folder/delete?fld_id=$folderID&sess_id=$sessionId');
   }
 
   Future<void> renameFile(dynamic item, String newName) async {
@@ -4411,6 +4339,7 @@ class MainFeature {
     
     if (response.statusCode == 200) {
     } else {
+      isOffline = true;
       print('Rename ${item.name} failed');
     }
   }
@@ -4435,24 +4364,19 @@ class MainFeature {
   Future<dynamic> _scanCloudFiles(String folderName, String fldID) async {
     dynamic scanedData = {};
     // Update synced files.
-    final response = await http.get(
-      Uri.parse('$baseURL/folder/list?fld_id=$fldID&sess_id=$sessionId'),
-    );
-
-    if (response.statusCode == 200) {
-      var data = jsonDecode(response.body);
-      List<String> cloudFiles = List<String>.from(data['result']['files'].map((file) => file['name']));
-      List<String> cloudFileCodes = List<String>.from(data['result']['files'].map((file) => file['file_code'].toString()));
-      List<String> cloudFolders = List<String>.from(data['result']['folders'].map((file) => file['name']));
-      List<String> cloudFolderIDs = List<String>.from(data['result']['folders'].map((file) => file['fld_id'].toString()));
-      scanedData['file'] = cloudFiles.asMap().map((i, f) => MapEntry(f, cloudFileCodes[i]));
-      scanedData['folder'] = [];
-      for (int i = 0; i < cloudFolders.length; i ++) {
-        String cloudFolder = cloudFolders[i];
-        String cloudFolderID = cloudFolderIDs[i];
-        dynamic cloudFolderData = await _scanCloudFiles(cloudFolder, cloudFolderID);
-        scanedData['folder'].add(cloudFolderData);
-      }
+    final response = await getAPICall('$baseURL/folder/list?fld_id=$fldID&sess_id=$sessionId');
+    var data = jsonDecode(response.body);
+    List<String> cloudFiles = List<String>.from(data['result']['files'].map((file) => file['name']));
+    List<String> cloudFileCodes = List<String>.from(data['result']['files'].map((file) => file['file_code'].toString()));
+    List<String> cloudFolders = List<String>.from(data['result']['folders'].map((file) => file['name']));
+    List<String> cloudFolderIDs = List<String>.from(data['result']['folders'].map((file) => file['fld_id'].toString()));
+    scanedData['file'] = cloudFiles.asMap().map((i, f) => MapEntry(f, cloudFileCodes[i]));
+    scanedData['folder'] = [];
+    for (int i = 0; i < cloudFolders.length; i ++) {
+      String cloudFolder = cloudFolders[i];
+      String cloudFolderID = cloudFolderIDs[i];
+      dynamic cloudFolderData = await _scanCloudFiles(cloudFolder, cloudFolderID);
+      scanedData['folder'].add(cloudFolderData);
     }
     return {"folder_name": folderName, "folder_id": fldID, "folder_data": scanedData};
 
@@ -4476,17 +4400,12 @@ class MainFeature {
         .toList();
     }
     
-    final response = await http.get(
-      Uri.parse('$baseURL/folder/list?fld_id=$folderID&sess_id=$sessionId'),
-    );
-
-    if (response.statusCode == 200) {
-      var data = jsonDecode(response.body);
-      cloudFiles = List<String>.from(data['result']['files'].map((file) => file['name']));
-      cloudFileCodes = List<String>.from(data['result']['files'].map((file) => file['file_code']));
-      cloudFolders = List<String>.from(data['result']['folders'].map((file) => file['name']));
-      cloudFolderCodes = List<String>.from(data['result']['folders'].map((file) => file['fld_id'].toString()));
-    }
+    final response = await getAPICall('$baseURL/folder/list?fld_id=$folderID&sess_id=$sessionId');
+    var data = jsonDecode(response.body);
+    cloudFiles = List<String>.from(data['result']['files'].map((file) => file['name']));
+    cloudFileCodes = List<String>.from(data['result']['files'].map((file) => file['file_code']));
+    cloudFolders = List<String>.from(data['result']['folders'].map((file) => file['name']));
+    cloudFolderCodes = List<String>.from(data['result']['folders'].map((file) => file['fld_id'].toString()));
 
     for (String file in localFiles) {
       if (!cloudFiles.contains(file)) {
@@ -4504,7 +4423,11 @@ class MainFeature {
     for (int i = 0; i < cloudFiles.length; i++) {
       String file = cloudFiles[i];
       if (!localFiles.contains(file)) {
-        await http.get(Uri.parse('$baseURL/file/remove?file_code=${cloudFileCodes[i]}&remove=1&sess_id=$sessionId'));
+        try {
+          await http.get(Uri.parse('$baseURL/file/remove?file_code=${cloudFileCodes[i]}&remove=1&sess_id=$sessionId'));
+        } catch (e) {
+          isOffline = true;
+        }
       }
     }
 
@@ -4561,17 +4484,12 @@ class MainFeature {
         .toList();
     }
 
-    final response = await http.get(
-      Uri.parse('$baseURL/folder/list?fld_id=$folderID&sess_id=$sessionId'),
-    );
-
-    if (response.statusCode == 200) {
-      var data = jsonDecode(response.body);
-      cloudFiles = List<String>.from(data['result']['files'].map((file) => file['name']));
-      cloudFileCodes = List<String>.from(data['result']['files'].map((file) => file['file_code']));
-      cloudFolders = List<String>.from(data['result']['folders'].map((file) => file['name']));
-      cloudFolderCodes = List<String>.from(data['result']['folders'].map((file) => file['fld_id'].toString()));
-    }
+    final response = await getAPICall('$baseURL/folder/list?fld_id=$folderID&sess_id=$sessionId');
+    var data = jsonDecode(response.body);
+    cloudFiles = List<String>.from(data['result']['files'].map((file) => file['name']));
+    cloudFileCodes = List<String>.from(data['result']['files'].map((file) => file['file_code']));
+    cloudFolders = List<String>.from(data['result']['folders'].map((file) => file['name']));
+    cloudFolderCodes = List<String>.from(data['result']['folders'].map((file) => file['fld_id'].toString()));
 
     for (int i = 0; i < cloudFiles.length; i ++) {
       String file = cloudFiles[i];
@@ -4708,17 +4626,11 @@ class MainFeature {
       return;
     }
     List<String> cloudFiles = [];
-    final response = await http.get(
-      Uri.parse('$baseURL/folder/list?fld_id=$cameraFolderID&sess_id=$sessionId'),
-    );
-
-    if (response.statusCode == 200) {
-      var data = jsonDecode(response.body);
-      cloudFiles = List<String>.from(data['result']['files'].map((file) => file['name']));
-    }
+    final response = await getAPICall('$baseURL/folder/list?fld_id=$cameraFolderID&sess_id=$sessionId');
+    var data = jsonDecode(response.body);
+    cloudFiles = List<String>.from(data['result']['files'].map((file) => file['name']));
 
     List<FileSystemEntity> mediaFiles = [];
-
     if (Platform.isAndroid) {
       // For Android: Accessing the DCIM/Camera folder
       const String directoryPath = "/storage/emulated/0/DCIM/Camera";
