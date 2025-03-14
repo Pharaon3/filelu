@@ -1622,7 +1622,7 @@ class _MyFilesPageState extends State<MyFilesPage> {
       builder: (context) {
         return FileOptions(
           item: item,
-          isAllFiles: isAllFiles(item),
+          getSelectedType: getSelectedType(item),
           onRename: () {
             Navigator.pop(context);
             _showRenameDialog(context, item);
@@ -1736,7 +1736,24 @@ class _MyFilesPageState extends State<MyFilesPage> {
               }
             }
           },
-
+          onRestore: () async {
+            Navigator.pop(context);
+            setState(() {
+              isLoading = true;
+            });
+            if (item != "") {
+              await mainFeature.restoreCloudItem(item);
+            } else {
+              for (dynamic selectedItem in selectedItems) {
+                await mainFeature.restoreCloudItem(selectedItem);
+              }
+            }
+            setState(() {
+              selectedItems = [];
+              isLoading = false;
+            });
+            _fetchFilesAndFolders(visitedFolderIDs.last.first.toString());
+          }
         );
       },
     );
@@ -2045,20 +2062,22 @@ class _MyFilesPageState extends State<MyFilesPage> {
     });
   }
 
-  bool isAllFiles(dynamic item) {
+  int getSelectedType(dynamic item) { // 0: normal, 1: only file, 2: trashed
     if (item != "") {
+      if (item.containsKey('trashed')) return 2;
       if (item.containsKey('file_code')) {
-        return true;
+        return 1;
       } else {
-        return false;
+        return 0;
       }
     } else {
       for (int i = 0; i < selectedItems.length; i ++) {
+        if (!selectedItems[i].containsKey('file_code')) return 2;
         if (!selectedItems[i].containsKey('file_code')) {
-          return false;
+          return 0;
         }
       }
-      return true;
+      return 1;
     }
   }
 
@@ -2787,7 +2806,7 @@ class FileFolder extends StatelessWidget {
 
 class FileOptions extends StatelessWidget {
   final dynamic item;
-  final bool isAllFiles;
+  final int getSelectedType;
   final VoidCallback onRename;
   final VoidCallback onCopy;
   final VoidCallback onMove;
@@ -2795,10 +2814,11 @@ class FileOptions extends StatelessWidget {
   final VoidCallback onRemove;
   final VoidCallback onShare;
   final VoidCallback onSetPW;
+  final VoidCallback onRestore;
 
   const FileOptions({
     required this.item,
-    required this.isAllFiles,
+    required this.getSelectedType,
     required this.onRename,
     required this.onCopy,
     required this.onMove,
@@ -2806,10 +2826,17 @@ class FileOptions extends StatelessWidget {
     required this.onRemove,
     required this.onShare,
     required this.onSetPW,
+    required this.onRestore,
   });
 
   @override
   Widget build(BuildContext context) {
+    if (getSelectedType == 2) {
+      return ListTile(
+          title: Text('Restore'),
+          onTap: onRestore,
+        );
+    }
     return ListView(
       children: [
         if (item != "")
@@ -2833,12 +2860,12 @@ class FileOptions extends StatelessWidget {
           title: Text('Remove'),
           onTap: onRemove,
         ),
-        if (isAllFiles)
+        if (getSelectedType == 1)
         ListTile(
           title: Text('Sharing/Only-Me'),
           onTap: onShare,
         ),
-        if (isAllFiles)
+        if (getSelectedType == 1)
         ListTile(
           title: Text('Set Password'),
           onTap: onSetPW,
@@ -4322,25 +4349,22 @@ class MainFeature {
   }
 
   Future<void> renameFile(dynamic item, String newName) async {
-    final response;
     if (item.containsKey('file_code')) {
       String fileCode = item['file_code'].toString();
-      response = await http.get(
-        Uri.parse('$baseURL/file/rename?file_code=$fileCode&name=$newName&sess_id=$sessionId'),
-      );
+      await getAPICall('$baseURL/file/rename?file_code=$fileCode&name=$newName&sess_id=$sessionId');
     } else if (item.containsKey('fld_id')) {
       String folderID = item['fld_id'].toString();
-      response = await http.get(
-        Uri.parse('$baseURL/folder/rename?fld_id=$folderID&name=$newName&sess_id=$sessionId'),
-      );
-    } else {
-      response = {'statusCode': 404};
+      await getAPICall('$baseURL/folder/rename?fld_id=$folderID&name=$newName&sess_id=$sessionId');
     }
-    
-    if (response.statusCode == 200) {
-    } else {
-      isOffline = true;
-      print('Rename ${item.name} failed');
+  }
+
+  Future<void> restoreCloudItem(dynamic item) async {
+    if (item.containsKey('file_code')) {
+      String fileCode = item['file_code'].toString();
+      await getAPICall('$baseURL/file/restore?file_code=$fileCode&restore=1&sess_id=$sessionId');
+    } else if (item.containsKey('fld_id')) {
+      String folderID = item['fld_id'].toString();
+      await getAPICall('$baseURL/folder/restore?fld_id=$folderID&sess_id=$sessionId');
     }
   }
 
