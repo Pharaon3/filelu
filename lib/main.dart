@@ -532,28 +532,28 @@ class _MyFilesPageState extends State<MyFilesPage> {
         isLoading = true;
         _isPlusButtonVisible = false;
       });
-        await mainFeature.initState();
-        final response = await mainFeature.getAPICall('$baseURL/folder/list?fld_id=${fldId.toString()}&sess_id=${mainFeature.sessionId}');
-        var data = jsonDecode(utf8.decode(response.bodyBytes));
+      await mainFeature.initState();
+      final response = await mainFeature.getAPICall('$baseURL/folder/list?fld_id=${fldId.toString()}&sess_id=${mainFeature.sessionId}');
+      var data = jsonDecode(utf8.decode(response.bodyBytes));
+      setState(() {
+        folders = data['result']['folders'];
+        files = data['result']['files'];
+        mainFeature.cachedFolderInfo = {
+          ...mainFeature.cachedFolderInfo,
+          fldId.toString(): {
+            "folders" : folders,
+            "files" : files,
+          }
+        };
+      });
+      if (deletedFiles.isEmpty && deletedFolders.isEmpty) {
+        final response1 = await mainFeature.getAPICall('$baseURL/folder/recycle?sess_id=${mainFeature.sessionId}');
+        var data1 = jsonDecode(utf8.decode(response1.bodyBytes));
         setState(() {
-          folders = data['result']['folders'];
-          files = data['result']['files'];
-          mainFeature.cachedFolderInfo = {
-            ...mainFeature.cachedFolderInfo,
-            fldId.toString(): {
-              "folders" : folders,
-              "files" : files,
-            }
-          };
+          deletedFiles = data1['result']['files'];
+          deletedFolders = data1['result']['folders'];
         });
-        if (deletedFiles.isEmpty && deletedFolders.isEmpty) {
-          final response1 = await mainFeature.getAPICall('$baseURL/folder/recycle?sess_id=${mainFeature.sessionId}');
-          var data1 = jsonDecode(utf8.decode(response1.bodyBytes));
-          setState(() {
-            deletedFiles = data1['result']['files'];
-            deletedFolders = data1['result']['folders'];
-          });
-        }
+      }
       setState(() {
         isLoading = false;
         _isPlusButtonVisible = true;
@@ -2146,36 +2146,30 @@ class _MyFilesPageState extends State<MyFilesPage> {
         print('Successfully copied.');
       } else if (copyStatus == 2 && copiedFileFolder.containsKey('file_code')) { // move file.
         String fileCode = copiedFileFolder['file_code'];
-          final response = await http.get(
-            Uri.parse('$baseURL/file/set_folder?file_code=$fileCode&fld_id=$folderID&sess_id=${mainFeature.sessionId}'),
-          );
-          if (response.statusCode == 200) {
-            print('Successfully moved.');
-          } else {
-            print("Failed to paste file.");
-          }
+        await mainFeature.getAPICall('$baseURL/file/set_folder?file_code=$fileCode&fld_id=$folderID&sess_id=${mainFeature.sessionId}');
+        print('Successfully moved.');
       } else if (copyStatus == 1 && !copiedFileFolder.containsKey('file_code')) { // copy folder.
         String copyFolderID = copiedFileFolder['fld_id'].toString();
         final response = await mainFeature.getAPICall('$baseURL/folder/copy?fld_id=$copyFolderID&sess_id=${mainFeature.sessionId}');
         var data = jsonDecode(response.body);
         String clonedFolderID = data['result']['fld_id'].toString();
         final response1 = await mainFeature.getAPICall('$baseURL/folder/move?fld_id=$clonedFolderID&dest_fld_id=$folderID&sess_id=${mainFeature.sessionId}');
-        String copiedFolderID = jsonDecode(response.body)['result']['fld_id'].toString();
-        mainFeature.renameFile(jsonDecode(response.body)['result'], copiedFileFolder['name']);
+        mainFeature.renameFile(jsonDecode(response1.body)['result'], copiedFileFolder['name']);
         print('Successfully copied.');
       } else if (copyStatus == 2 && !copiedFileFolder.containsKey('file_code')) { // move folder.
         String moveFolderID = copiedFileFolder['fld_id'].toString();
-        final response1 = await mainFeature.getAPICall('$baseURL/folder/move?fld_id=$moveFolderID&dest_fld_id=$folderID&sess_id=${mainFeature.sessionId}');
+        await mainFeature.getAPICall('$baseURL/folder/move?fld_id=$moveFolderID&dest_fld_id=$folderID&sess_id=${mainFeature.sessionId}');
         print('Successfully moved.');
       } else {
         print('Nothing to paste.');
       }
     }
     copyStatus = 0;
+    await _fetchFilesAndFolders(copiedFileFolders.first['fld_id']);
     copiedFileFolders = [];
-    _fetchFilesAndFolders(visitedFolderIDs.last.first.toString());
+    await _fetchFilesAndFolders(visitedFolderIDs.last.first.toString());
     setState(() {
-      isLoading = true;
+      isLoading = false;
     });
   }
 
