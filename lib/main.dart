@@ -1255,6 +1255,12 @@ class _MyFilesPageState extends State<MyFilesPage> {
                                           shortenName(file['name']),
                                           style: TextStyle(fontWeight: FontWeight.bold),
                                         ),
+                                        if(file['only_me'].toString() == '1')
+                                        Text(
+                                          'Only Me',  // Replace 'size' with the actual field you want to display
+                                          style: TextStyle(color: Colors.grey, fontSize: 12),
+                                        )
+                                        else
                                         SizedBox(height: 4), // Space between the file name and the additional data
                                         Text(
                                           file['size'] ?? 'Size not available',  // Replace 'size' with the actual field you want to display
