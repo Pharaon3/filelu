@@ -478,7 +478,7 @@ class _MyFilesPageState extends State<MyFilesPage> {
   final ScrollController _scrollController = ScrollController();
   bool _isPlusButtonVisible = true;
   bool isGridView = false;
-  bool isTrashView = false;
+  bool isTrashView = true;
   List<String> videoExtensions = ['mp4', 'mov', 'avi', 'mkv', 'flv', 'wmv'];
   List<String> audioExtensions = ['mp3', 'wav', 'aac', 'flac', 'ogg', 'm4a'];
   List<String> photoExtensions = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'];
@@ -520,8 +520,8 @@ class _MyFilesPageState extends State<MyFilesPage> {
   }
 
   // Fetch files and folders using the API
-  Future<void> _fetchFilesAndFolders(fldId) async {
-    if (mainFeature.cachedFolderInfo.containsKey(fldId.toString())) {
+  Future<void> _fetchFilesAndFolders(fldId, {bool hotReload = true}) async {
+    if (hotReload == false && mainFeature.cachedFolderInfo.containsKey(fldId.toString())) {
       dynamic data = mainFeature.cachedFolderInfo[fldId.toString()];
       setState(() {
         folders = data['folders'];
@@ -546,6 +546,14 @@ class _MyFilesPageState extends State<MyFilesPage> {
             }
           };
         });
+        if (deletedFiles.isEmpty && deletedFolders.isEmpty) {
+          final response1 = await mainFeature.getAPICall('$baseURL/folder/recycle?sess_id=${mainFeature.sessionId}');
+          var data1 = jsonDecode(utf8.decode(response1.bodyBytes));
+          setState(() {
+            deletedFiles = data1['result']['files'];
+            deletedFolders = data1['result']['folders'];
+          });
+        }
       setState(() {
         isLoading = false;
         _isPlusButtonVisible = true;
@@ -1772,7 +1780,7 @@ class _MyFilesPageState extends State<MyFilesPage> {
       });
     } else {
       try {
-        await _fetchFilesAndFolders(item["fld_id"]);
+        await _fetchFilesAndFolders(item["fld_id"], hotReload: false);
         visitedFolderIDs.add([item['fld_id'], item['name']]);
       } catch (e) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
@@ -1948,10 +1956,10 @@ class _MyFilesPageState extends State<MyFilesPage> {
   void _backCloudFolder() async {
     try {
       visitedFolderIDs.removeLast();
-      await _fetchFilesAndFolders(visitedFolderIDs.last.first);
+      await _fetchFilesAndFolders(visitedFolderIDs.last.first, hotReload: false);
     } catch (e) {
       print(e);
-      _fetchFilesAndFolders(0);
+      _fetchFilesAndFolders(0, hotReload: false);
       visitedFolderIDs = [[0, '/'], [0, '/']];
     }
   }
@@ -1959,7 +1967,7 @@ class _MyFilesPageState extends State<MyFilesPage> {
   void _homeCloudFolder() async {
     try {
       visitedFolderIDs = [[0, '/'], [0, '/']];
-      await _fetchFilesAndFolders(visitedFolderIDs.last.first);
+      await _fetchFilesAndFolders(visitedFolderIDs.last.first, hotReload: false);
     } catch (e) {
       print(e);
     }
@@ -2166,6 +2174,9 @@ class _MyFilesPageState extends State<MyFilesPage> {
     copyStatus = 0;
     copiedFileFolders = [];
     _fetchFilesAndFolders(visitedFolderIDs.last.first.toString());
+    setState(() {
+      isLoading = true;
+    });
   }
 
   Future<void> createFolderIfNotExists(String path) async {
