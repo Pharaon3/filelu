@@ -15,6 +15,7 @@ import 'package:intl/intl.dart';
 import 'dart:isolate';
 import 'dart:async';
 import 'package:open_file/open_file.dart';
+import 'package:flutter/services.dart';
 
 Map<int, http.StreamedResponse?> activeDownloads = {}; // Stores active requests
 const String baseURL = "https://filelu.com/app";
@@ -1736,6 +1737,9 @@ class _MyFilesPageState extends State<MyFilesPage> {
               }
             }
           },
+          onCopyShareLink: () async {
+            onCopyShareLink(context, item);
+          },
           onRestore: () async {
             Navigator.pop(context);
             setState(() {
@@ -2062,6 +2066,32 @@ class _MyFilesPageState extends State<MyFilesPage> {
     });
   }
 
+  void onCopyShareLink(BuildContext context, Map<String, dynamic> item) async {
+    if (item.containsKey('link')) {
+      // Copy the link to the clipboard
+      await Clipboard.setData(ClipboardData(text: item['link']));
+      
+      // Show an alert dialog
+      showDialog(
+        context: context,
+        builder: (BuildContext context) {
+          return AlertDialog(
+            title: Text('Link Copied'),
+            content: Text('The share link has been copied to your clipboard.'),
+            actions: <Widget>[
+              TextButton(
+                child: Text('OK'),
+                onPressed: () {
+                  Navigator.of(context).pop(); // Close the dialog
+                },
+              ),
+            ],
+          );
+        },
+      );
+    }
+  }
+
   int getSelectedType(dynamic item) { // 0: normal, 1: only file, 2: trashed
     if (item != "") {
       if (item.containsKey('trashed')) return 2;
@@ -2072,7 +2102,7 @@ class _MyFilesPageState extends State<MyFilesPage> {
       }
     } else {
       for (int i = 0; i < selectedItems.length; i ++) {
-        if (!selectedItems[i].containsKey('file_code')) return 2;
+        if (selectedItems[i].containsKey('trashed')) return 2;
         if (!selectedItems[i].containsKey('file_code')) {
           return 0;
         }
@@ -2814,6 +2844,7 @@ class FileOptions extends StatelessWidget {
   final VoidCallback onRemove;
   final VoidCallback onShare;
   final VoidCallback onSetPW;
+  final VoidCallback onCopyShareLink;
   final VoidCallback onRestore;
 
   const FileOptions({
@@ -2826,6 +2857,7 @@ class FileOptions extends StatelessWidget {
     required this.onRemove,
     required this.onShare,
     required this.onSetPW,
+    required this.onCopyShareLink,
     required this.onRestore,
   });
 
@@ -2864,6 +2896,11 @@ class FileOptions extends StatelessWidget {
         ListTile(
           title: Text('Sharing/Only-Me'),
           onTap: onShare,
+        ),
+        if (getSelectedType == 1)
+        ListTile(
+          title: Text('Copy Share Link'),
+          onTap: onCopyShareLink,
         ),
         if (getSelectedType == 1)
         ListTile(
