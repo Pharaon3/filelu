@@ -620,6 +620,13 @@ class _MyFilesPageState extends State<MyFilesPage> {
     int totalItems = folders.length + files.length;
     bool selectionMode = selectedItems.isNotEmpty; // Enable selection mode if items are selected
 
+    String shortenName(String name, {int maxLength = 10}) {
+      if (name.length > maxLength) {
+        return '${name.substring(0, maxLength)}...'; // Append ellipsis if truncated
+      }
+      return name;
+    }
+
     List<dynamic> getPaginatedItems() {
       if (itemsPerPage == 0) {
         if (isTrashView) {
@@ -1245,7 +1252,7 @@ class _MyFilesPageState extends State<MyFilesPage> {
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
                                         Text(
-                                          file['name'],
+                                          shortenName(file['name']),
                                           style: TextStyle(fontWeight: FontWeight.bold),
                                         ),
                                         SizedBox(height: 4), // Space between the file name and the additional data
