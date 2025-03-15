@@ -16,6 +16,7 @@ import 'dart:isolate';
 import 'dart:async';
 import 'package:open_file/open_file.dart';
 import 'package:flutter/services.dart';
+import 'package:share_plus/share_plus.dart';
 
 Map<int, http.StreamedResponse?> activeDownloads = {}; // Stores active requests
 const String baseURL = "https://filelu.com/app";
@@ -1758,8 +1759,8 @@ class _MyFilesPageState extends State<MyFilesPage> {
               }
             }
           },
-          onCopyShareLink: () async {
-            onCopyShareLink(context, item);
+          onNativeShare: () async {
+            onNativeShare(context, item);
           },
           onRestore: () async {
             Navigator.pop(context);
@@ -2087,18 +2088,18 @@ class _MyFilesPageState extends State<MyFilesPage> {
     });
   }
 
-  void onCopyShareLink(BuildContext context, Map<String, dynamic> item) async {
+  void onNativeShare(BuildContext context, Map<String, dynamic> item) async {
     if (item.containsKey('link')) {
-      // Copy the link to the clipboard
-      await Clipboard.setData(ClipboardData(text: item['link']));
+      // Share the link using the share_plus package
+      await Share.share(item['link'], subject: 'Check out this link!');
       
-      // Show an alert dialog
+      // Optionally show a confirmation dialog
       showDialog(
         context: context,
         builder: (BuildContext context) {
           return AlertDialog(
-            title: Text('Link Copied'),
-            content: Text('The share link has been copied to your clipboard.'),
+            title: Text('Share Link'),
+            content: Text('The share link has been shared successfully.'),
             actions: <Widget>[
               TextButton(
                 child: Text('OK'),
@@ -2862,7 +2863,7 @@ class FileOptions extends StatelessWidget {
   final VoidCallback onRemove;
   final VoidCallback onShare;
   final VoidCallback onSetPW;
-  final VoidCallback onCopyShareLink;
+  final VoidCallback onNativeShare;
   final VoidCallback onRestore;
 
   const FileOptions({
@@ -2875,7 +2876,7 @@ class FileOptions extends StatelessWidget {
     required this.onRemove,
     required this.onShare,
     required this.onSetPW,
-    required this.onCopyShareLink,
+    required this.onNativeShare,
     required this.onRestore,
   });
 
@@ -2890,43 +2891,68 @@ class FileOptions extends StatelessWidget {
     return ListView(
       children: [
         if (item != "")
-        ListTile(
-          title: Text('Rename'),
-          onTap: onRename,
+          Container(
+            height: 40.0, // Adjust height as needed
+            child: ListTile(
+              title: Text('Rename'),
+              onTap: onRename,
+            ),
+          ),
+        Container(
+          height: 40.0,
+          child: ListTile(
+            title: Text('Copy'),
+            onTap: onCopy,
+          ),
         ),
-        ListTile(
-          title: Text('Copy'),
-          onTap: onCopy,
+        Container(
+          height: 40.0,
+          child: ListTile(
+            title: Text('Move To'),
+            onTap: onMove,
+          ),
         ),
-        ListTile(
-          title: Text('Move To'),
-          onTap: onMove,
+        Container(
+          height: 40.0,
+          child: ListTile(
+            title: Text('Download'),
+            onTap: onDownload,
+          ),
         ),
-        ListTile(
-          title: Text('Download'),
-          onTap: onDownload,
-        ),
-        ListTile(
-          title: Text('Remove'),
-          onTap: onRemove,
+        Container(
+          height: 40.0,
+          child: ListTile(
+            title: Text('Remove'),
+            onTap: onRemove,
+          ),
         ),
         if (getSelectedType == 1)
-        ListTile(
-          title: Text('Sharing/Only-Me'),
-          onTap: onShare,
-        ),
+          Container(
+            height: 40.0,
+            child: ListTile(
+              title: Text('Sharing/Only-Me'),
+              onTap: onShare,
+            ),
+          ),
         if (getSelectedType == 1)
-        ListTile(
-          title: Text('Copy Share Link'),
-          onTap: onCopyShareLink,
-        ),
+          Container(
+            height: 40.0,
+            child: ListTile(
+              title: Text('Native Share'),
+              onTap: onNativeShare,
+            ),
+          ),
         if (getSelectedType == 1)
-        ListTile(
-          title: Text('Set Password'),
-          onTap: onSetPW,
-        ),
+          Container(
+            height: 40.0,
+            child: ListTile(
+              title: Text('Set Password'),
+              onTap: onSetPW,
+            ),
+          ),
       ],
     );
+
   }
 }
 
