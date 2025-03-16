@@ -630,7 +630,7 @@ class _MyFilesPageState extends State<MyFilesPage> {
 
     List<dynamic> getPaginatedItems() {
       if (itemsPerPage == 0) {
-        if (isTrashView) {
+        if (isTrashView && visitedFolderIDs.last.first == 0) {
           return [
             {
               "name": "Trash",
@@ -647,7 +647,7 @@ class _MyFilesPageState extends State<MyFilesPage> {
       }
       int startIndex = currentPage * itemsPerPage;
       int endIndex = startIndex + itemsPerPage;
-      if (isTrashView) {
+      if (isTrashView && visitedFolderIDs.last.first == 0) {
         return [
           {
             "name": "Trash",
@@ -4082,8 +4082,6 @@ class MainFeature {
       uploadQueue[index]['isRemoved'] = true;
       return "no file";
     }
-    int fileSize = await file.length();
-    print("Uploading file of size: $fileSize bytes");
 
     // Check if the file already exists on cloud
     List<String> cloudFiles = [];
