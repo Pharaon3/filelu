@@ -615,6 +615,30 @@ class _MyFilesPageState extends State<MyFilesPage> {
     }
   }
 
+  void performSearch(String query) async {
+    setState(() {
+      isLoading = true;
+      _isPlusButtonVisible = false;
+    });
+      final response = await http.get(
+        Uri.parse('$baseURL/folder/list?search=$query&sess_id=${mainFeature.sessionId}'),
+      );
+
+      if (response.statusCode == 200) {
+        var data = jsonDecode(utf8.decode(response.bodyBytes));
+        setState(() {
+          folders = data['result']['folders'];
+          files = data['result']['files'];
+        });
+      } else {
+        print('Failed to load folders and files');
+      }
+    setState(() {
+      isLoading = false;
+      _isPlusButtonVisible = true;
+    });
+  }
+
   // Display file/folder list with options
   Widget _buildFileFolderList() {
     int itemsPerPage = numberOfImages; // Number of items per page
@@ -845,6 +869,29 @@ class _MyFilesPageState extends State<MyFilesPage> {
     Widget gridView(BuildContext listContext) {
       return Column(
         children: [
+          Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.grey[200],
+                borderRadius: BorderRadius.circular(10.0),
+              ),
+              child: TextField(
+                decoration: InputDecoration(
+                  hintText: 'Search',
+                  prefixIcon: Icon(Icons.search, color: Colors.grey),
+                  border: InputBorder.none,
+                  enabledBorder: InputBorder.none, // Remove bottom border when not focused
+                  focusedBorder: InputBorder.none,  // Remove bottom border when focused
+                  contentPadding: EdgeInsets.symmetric(vertical: 12),
+                ),
+                textInputAction: TextInputAction.search,
+                onSubmitted: (value) {
+                  performSearch(value);
+                },
+              ),
+            ),
+          ),
           // Scrollable Content with RefreshIndicator
           Expanded(
             child: RefreshIndicator(
@@ -1087,6 +1134,29 @@ class _MyFilesPageState extends State<MyFilesPage> {
     Widget listView(BuildContext listContext) {
       return Column(
         children: [
+          Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.grey[200],
+                borderRadius: BorderRadius.circular(10.0),
+              ),
+              child: TextField(
+                decoration: InputDecoration(
+                  hintText: 'Search',
+                  prefixIcon: Icon(Icons.search, color: Colors.grey),
+                  border: InputBorder.none,
+                  enabledBorder: InputBorder.none, // Remove bottom border when not focused
+                  focusedBorder: InputBorder.none,  // Remove bottom border when focused
+                  contentPadding: EdgeInsets.symmetric(vertical: 12),
+                ),
+                textInputAction: TextInputAction.search,
+                onSubmitted: (value) {
+                  performSearch(value);
+                },
+              ),
+            ),
+          ),
           // Scrollable Content with RefreshIndicator
           Expanded(
             child: RefreshIndicator(
@@ -1096,10 +1166,10 @@ class _MyFilesPageState extends State<MyFilesPage> {
                 builder: (context, constraints) {
                   return SingleChildScrollView(
                     controller: _scrollController,
-                    physics: AlwaysScrollableScrollPhysics(), // Ensures pull-to-refresh always works
+                    physics: AlwaysScrollableScrollPhysics(),
                     child: ConstrainedBox(
                       constraints: BoxConstraints(
-                        minHeight: constraints.maxHeight, // Ensure minimum height is screen height
+                        minHeight: constraints.maxHeight,
                       ),
                       child: Column(
                         children: [
@@ -1109,81 +1179,81 @@ class _MyFilesPageState extends State<MyFilesPage> {
                               ...getPaginatedItems()
                                   .where((item) => !item.containsKey('file_code'))
                                   .map((folder) {
-                                bool isSelected = selectedItems.contains(folder);
-                                bool isCrypted = folder['fld_encrypted'].toString() == "1";
+                                    bool isSelected = selectedItems.contains(folder);
+                                    bool isCrypted = folder['fld_encrypted'].toString() == "1";
 
-                                return GestureDetector(
-                                  onLongPress: () => toggleSelectionMode(folder),
-                                  onTap: () {
-                                    if (selectionMode) {
-                                      toggleSelectionMode(folder);
-                                    } else {
-                                      _openCloudFolder(context, folder);
-                                    }
-                                  },
-                                  child: ListTile(
-                                    leading: Stack(
-                                      clipBehavior: Clip.none,
-                                      children: [
-                                        Icon(folder['name'] == 'Trash' ? Icons.delete : Icons.folder, size: 40, color: isSelected ? Colors.cyan : Colors.blue),
-                                        if(folder["total_files"].toString() != "null") Positioned(
-                                          top: -5,
-                                          left: -5,
-                                          child: Container(
-                                            padding: EdgeInsets.all(4),
-                                            decoration: BoxDecoration(
-                                              color: Colors.green,
-                                              shape: BoxShape.circle,
-                                            ),
-                                            child: Text(
-                                              folder["total_files"].toString(),
-                                              style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
-                                            ),
-                                          ),
-                                        ),
-                                        if (isCrypted)
-                                          Positioned(
-                                            bottom: 6, // Adjust this value to position it just below the icon
-                                            left: 0,
-                                            right: 0,
-                                            child: IntrinsicWidth( // Ensures the width fits the content
+                                    return GestureDetector(
+                                      onLongPress: () => toggleSelectionMode(folder),
+                                      onTap: () {
+                                        if (selectionMode) {
+                                          toggleSelectionMode(folder);
+                                        } else {
+                                          _openCloudFolder(context, folder);
+                                        }
+                                      },
+                                      child: ListTile(
+                                        leading: Stack(
+                                          clipBehavior: Clip.none,
+                                          children: [
+                                            Icon(folder['name'] == 'Trash' ? Icons.delete : Icons.folder, size: 40, color: isSelected ? Colors.cyan : Colors.blue),
+                                            if(folder["total_files"].toString() != "null") Positioned(
+                                              top: -5,
+                                              left: -5,
                                               child: Container(
-                                                padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                padding: EdgeInsets.all(4),
                                                 decoration: BoxDecoration(
                                                   color: Colors.green,
-                                                  borderRadius: BorderRadius.circular(8),
+                                                  shape: BoxShape.circle,
                                                 ),
-                                                child: Center( // Ensures the text is centered inside the container
-                                                  child: Text(
-                                                    "SSCE",
-                                                    textAlign: TextAlign.center,
-                                                    style: TextStyle(
-                                                      color: Color.fromARGB(255, 180, 243, 168),
-                                                      fontSize: 8,
-                                                      fontWeight: FontWeight.bold,
+                                                child: Text(
+                                                  folder["total_files"].toString(),
+                                                  style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                                                ),
+                                              ),
+                                            ),
+                                            if (isCrypted)
+                                              Positioned(
+                                                bottom: 6,
+                                                left: 0,
+                                                right: 0,
+                                                child: IntrinsicWidth(
+                                                  child: Container(
+                                                    padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                    decoration: BoxDecoration(
+                                                      color: Colors.green,
+                                                      borderRadius: BorderRadius.circular(8),
+                                                    ),
+                                                    child: Center(
+                                                      child: Text(
+                                                        "SSCE",
+                                                        textAlign: TextAlign.center,
+                                                        style: TextStyle(
+                                                          color: Color.fromARGB(255, 180, 243, 168),
+                                                          fontSize: 8,
+                                                          fontWeight: FontWeight.bold,
+                                                        ),
+                                                      ),
                                                     ),
                                                   ),
                                                 ),
                                               ),
-                                            ),
+                                          ],
+                                        ),
+                                        title: Text(folder['name']),
+                                        trailing: IconButton(
+                                          icon: Icon(
+                                            selectionMode
+                                                ? (isSelected ? Icons.check_circle : Icons.radio_button_unchecked)
+                                                : Icons.more_vert,
+                                            color: isSelected ? Colors.blue : null,
                                           ),
-                                      ],
-                                    ),
-                                    title: Text(folder['name']),
-                                    trailing: IconButton(
-                                      icon: Icon(
-                                        selectionMode
-                                            ? (isSelected ? Icons.check_circle : Icons.radio_button_unchecked)
-                                            : Icons.more_vert,
-                                        color: isSelected ? Colors.blue : null,
+                                          onPressed: selectionMode
+                                              ? () => toggleSelectionMode(folder)
+                                              : () => _showOptions(context, folder),
+                                        ),
                                       ),
-                                      onPressed: selectionMode
-                                          ? () => toggleSelectionMode(folder)
-                                          : () => _showOptions(context, folder),
-                                    ),
-                                  ),
-                                );
-                              }).toList(),
+                                    );
+                                  }).toList(),
 
                             // Display Files
                             if (files.isNotEmpty)
@@ -1366,75 +1436,9 @@ class _MyFilesPageState extends State<MyFilesPage> {
                     ),
                   ),
                 ],
-              ),
             ),
+          ),
         ],
-      );
-    }
-    
-    void performSearch(String query) async {
-    setState(() {
-      isLoading = true;
-      _isPlusButtonVisible = false;
-    });
-      final response = await http.get(
-        Uri.parse('$baseURL/folder/list?search=$query&sess_id=${mainFeature.sessionId}'),
-      );
-
-      if (response.statusCode == 200) {
-        var data = jsonDecode(utf8.decode(response.bodyBytes));
-        setState(() {
-          folders = data['result']['folders'];
-          files = data['result']['files'];
-        });
-      } else {
-        print('Failed to load folders and files');
-      }
-    setState(() {
-      isLoading = false;
-      _isPlusButtonVisible = true;
-    });
-    }
-
-    void openSearchDialog() {
-      TextEditingController searchController = TextEditingController();
-
-      showDialog(
-        context: context,
-        builder: (context) {
-          return AlertDialog(
-            title: Text("Search"),
-            content: TextField(
-              controller: searchController,
-              autofocus: true,
-              decoration: InputDecoration(
-                hintText: "Enter file or folder name...",
-                border: OutlineInputBorder(),
-                suffixIcon: IconButton(
-                  icon: Icon(Icons.clear),
-                  onPressed: () => searchController.clear(),
-                ),
-              ),
-              onSubmitted: (query) {
-                Navigator.pop(context);
-                performSearch(query);
-              },
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: Text("Cancel"),
-              ),
-              TextButton(
-                onPressed: () {
-                  Navigator.pop(context);
-                  performSearch(searchController.text);
-                },
-                child: Text("Search"),
-              ),
-            ],
-          );
-        },
       );
     }
 
@@ -1463,10 +1467,6 @@ class _MyFilesPageState extends State<MyFilesPage> {
         ),
         actions: [
           if (!selectionMode) ...[
-            IconButton(
-              icon: Icon(Icons.search, color: Colors.blue),
-              onPressed: () => openSearchDialog(),
-            ),
             IconButton(
               icon: Icon(Icons.sort, color: Colors.blue),
               onPressed: () {
@@ -3111,7 +3111,6 @@ class _SyncPageState extends State<SyncPage> {
       mainFeature.syncOrders.add(SyncOrder(localPath: localPath, syncType: syncType, remotePath: remotePath, fld_id: currentRemoteFldID));
       _toggleSync(mainFeature.syncOrders.length - 1);
     });
-    _saveSyncOrders();
   }
 
   /// Delete Sync Order
@@ -3998,6 +3997,7 @@ class MainFeature {
   }
 
   Future<void> _infinitCycling() async {
+    print("infinitCycling");
     for(int i = 0; i < 5; i ++) {
       if (uploadQueue.isNotEmpty && uploadQueue.length > currentUploadingItemIndex) {
         await uploadFile(
@@ -4015,31 +4015,37 @@ class MainFeature {
     }
     
     if (!isSyncing) {
+      print("!isSyncing");
       isSyncing = true;
       if (uploadQueue.isEmpty || uploadQueue.length == currentUploadingItemIndex) {
         if (downloadQueue.isEmpty || downloadQueue.length == currentDownloadingItemIndex) {
+          print("if-if");
           try {
+            print("try");
             for (int index = 0; index < syncOrders.length; index++) {
               if (syncOrders[index].isRunning) {
                 await _performSync(syncOrders[index]);
               }
             }
           } catch (e) {
+            print("catch");
             print("Error during sync: $e");
           } finally {
+            print("finally");
             if (currentUploadingItemIndex + currentDownloadingItemIndex > lastScanCount) {
+              print("finally - if");
               dynamic scanedData = await _scanCloudFiles("", "0");
               syncedFileFolders = scanedData;
               _saveGlobal('scaned_data', scanedData);
-              isSyncing = false;
             }
+            isSyncing = false;
             lastScanCount = currentUploadingItemIndex + currentDownloadingItemIndex;
           }
         }
       }
     }
 
-    await Future.delayed(Duration(seconds: 10));
+    await Future.delayed(Duration(seconds: 3));
     await _infinitCycling();
   }
 
@@ -4448,6 +4454,7 @@ class MainFeature {
   }
 
   Future<void> _performSync(SyncOrder order) async {
+    print('perform sync');
     switch (order.syncType) {
       case "Upload Only":
         await uploadFolder(order.localPath, order.fld_id);
