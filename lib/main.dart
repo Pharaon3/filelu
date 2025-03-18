@@ -1689,6 +1689,7 @@ class _MyFilesPageState extends State<MyFilesPage> {
       builder: (context) {
         return FileOptions(
           item: item,
+          selectedItems: selectedItems,
           getSelectedType: getSelectedType(item),
           onRename: () {
             Navigator.pop(context);
@@ -2901,6 +2902,7 @@ class FileFolder extends StatelessWidget {
 
 class FileOptions extends StatelessWidget {
   final dynamic item;
+  final List<dynamic> selectedItems;
   final int getSelectedType;
   final VoidCallback onRename;
   final VoidCallback onCopy;
@@ -2914,6 +2916,7 @@ class FileOptions extends StatelessWidget {
 
   const FileOptions({
     required this.item,
+    required this.selectedItems,
     required this.getSelectedType,
     required this.onRename,
     required this.onCopy,
@@ -2984,7 +2987,7 @@ class FileOptions extends StatelessWidget {
           Container(
             height: 40.0,
             child: ListTile(
-              title: Text('Native Share'),
+              title: Text('Share Link'),
               onTap: onNativeShare,
             ),
           ),
@@ -2992,7 +2995,20 @@ class FileOptions extends StatelessWidget {
           Container(
             height: 40.0,
             child: ListTile(
-              title: Text('Set Password'),
+              title: Text(
+                item != ""
+                    ? (item['link_pass'].toString() == "1" ? "Unset Password" : "Set Password")
+                    : (() {
+                        bool isAllSet = true;
+                        for (int i = 0; i < selectedItems.length; i++) {
+                          if (selectedItems[i]['link_pass'].toString() == "0") {
+                            isAllSet = false;
+                            break; // Exit loop early if any item is not set
+                          }
+                        }
+                        return isAllSet ? "Unset Password" : "Set Password";
+                      }()),
+              ),
               onTap: onSetPW,
             ),
           ),
