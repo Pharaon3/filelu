@@ -1200,6 +1200,7 @@ class _MyFilesPageState extends State<MyFilesPage> {
                                   .map((folder) {
                                     bool isSelected = selectedItems.contains(folder);
                                     bool isCrypted = folder['fld_encrypted'].toString() == "1";
+                                    bool isPublic = folder['fld_public'].toString() == "1";
 
                                     return Column(
                                       children: [
@@ -1241,6 +1242,12 @@ class _MyFilesPageState extends State<MyFilesPage> {
                                                       ),
                                                     ),
                                                   ),
+                                                if (folder['fld_pass'].toString() == "1") // Check if link_pass is 1
+                                                  Positioned(
+                                                    top: -5,
+                                                    right: -5,
+                                                    child: Icon(Icons.lock, color: Colors.green, size: 16),
+                                                  ),
                                                 if (isCrypted)
                                                   Positioned(
                                                     bottom: 6,
@@ -1269,7 +1276,20 @@ class _MyFilesPageState extends State<MyFilesPage> {
                                                   ),
                                               ],
                                             ),
-                                            title: Text(folder['name']),
+                                            title: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  shortenName(folder['name']),
+                                                  style: TextStyle(fontWeight: FontWeight.bold),
+                                                ),
+                                                if (isPublic)
+                                                Text(
+                                                  'Only Me',
+                                                  style: TextStyle(color: Colors.grey, fontSize: 12),
+                                                ),
+                                              ],
+                                            ),
                                             trailing: IconButton(
                                               icon: Icon(
                                                 selectionMode
@@ -1326,7 +1346,7 @@ class _MyFilesPageState extends State<MyFilesPage> {
                                             if (file['link_pass'].toString() == "1") // Check if link_pass is 1
                                               Positioned(
                                                 top: -5,
-                                                left: -5,
+                                                right: -5,
                                                 child: Icon(Icons.lock, color: Colors.green, size: 16),
                                               ),
                                             if (isCrypted)
@@ -1785,7 +1805,7 @@ class _MyFilesPageState extends State<MyFilesPage> {
           onSetPW: () async {
             Navigator.pop(context);
             if(item != "") {
-              if (item['link_pass'].toString() == "1") {
+              if (item['link_pass'].toString() == "1" || item['fld_pass'].toString() == "1") {
                 _unsetPassword(item);
               } else {
                 _setPasswordDialog(context, item);
@@ -1793,7 +1813,7 @@ class _MyFilesPageState extends State<MyFilesPage> {
             } else {
               bool isAllSet = true;
               for (int i = 0; i < selectedItems.length; i ++) {
-                if (selectedItems[i]['link_pass'].toString() == "0") {
+                if (selectedItems[i]['link_pass'].toString() == "0" || selectedItems[i]['fld_pass'].toString() == "1") {
                   isAllSet = false;
                 }
               }
@@ -2135,27 +2155,9 @@ class _MyFilesPageState extends State<MyFilesPage> {
 
   void onNativeShare(BuildContext context, Map<String, dynamic> item) async {
     if (item.containsKey('link')) {
-      // Share the link using the share_plus package
       await Share.share(item['link'], subject: 'Check out this link!');
-      
-      // Optionally show a confirmation dialog
-      showDialog(
-        context: context,
-        builder: (BuildContext context) {
-          return AlertDialog(
-            title: Text('Share Link'),
-            content: Text('The share link has been shared successfully.'),
-            actions: <Widget>[
-              TextButton(
-                child: Text('OK'),
-                onPressed: () {
-                  Navigator.of(context).pop(); // Close the dialog
-                },
-              ),
-            ],
-          );
-        },
-      );
+    } else if (item.containsKey('fld_token')) {
+      await Share.share("https://filelu.com/f/${item['fld_token']}", subject: 'Check out this link!');
     }
   }
 
@@ -2975,7 +2977,7 @@ class FileOptions extends StatelessWidget {
             onTap: onRemove,
           ),
         ),
-        if (getSelectedType == 1)
+        // if (getSelectedType == 1)
           Container(
             height: 40.0,
             child: ListTile(
@@ -2983,7 +2985,7 @@ class FileOptions extends StatelessWidget {
               onTap: onShare,
             ),
           ),
-        if (getSelectedType == 1)
+        // if (getSelectedType == 1)
           Container(
             height: 40.0,
             child: ListTile(
@@ -2991,17 +2993,17 @@ class FileOptions extends StatelessWidget {
               onTap: onNativeShare,
             ),
           ),
-        if (getSelectedType == 1)
+        // if (getSelectedType == 1)
           Container(
             height: 40.0,
             child: ListTile(
               title: Text(
                 item != ""
-                    ? (item['link_pass'].toString() == "1" ? "Unset Password" : "Set Password")
+                    ? (item['link_pass'].toString() == "1" || item['fld_pass'].toString() == "1" ? "Unset Password" : "Set Password")
                     : (() {
                         bool isAllSet = true;
                         for (int i = 0; i < selectedItems.length; i++) {
-                          if (selectedItems[i]['link_pass'].toString() == "0") {
+                          if (selectedItems[i]['link_pass'].toString() == "0" || selectedItems[i]['fld_pass'].toString() == "0") {
                             isAllSet = false;
                             break; // Exit loop early if any item is not set
                           }
@@ -4471,32 +4473,21 @@ class MainFeature {
     if(item.containsKey('file_code')) {
       String fileCode = item['file_code'].toString();
       String shareState = (1 - item['only_me']).toString();
-      final response = await http.get(
-        Uri.parse('$baseURL/file/only_me?file_code=$fileCode&only_me=$shareState&sess_id=$sessionId'),
-      );
-      if (response.statusCode == 200) {
-      } else {
-        isOffline = true;
-      }
+      await getAPICall('$baseURL/file/only_me?file_code=$fileCode&only_me=$shareState&sess_id=$sessionId');
     } else {
-      // String folderID = item['fld_id'].toString();
-      print("Only Files are able to share.");
+      String folderID = item['fld_id'].toString();
+      String shareState = (1 - item['fld_public']).toString();
+      await getAPICall('$baseURL/folder/setting?fld_id=$folderID&filedrop=0&fld_public=$shareState&sess_id=$sessionId');
     }
   }
 
   Future<void> lockItem(dynamic item, String password) async {
     if(item.containsKey('file_code')) {
       String fileCode = item['file_code'].toString();
-      final response = await http.get(
-        Uri.parse('$baseURL/file/set_password?file_code=$fileCode&file_password=$password&sess_id=$sessionId'),
-      );
-      if (response.statusCode == 200) {
-      } else {
-        isOffline = true;
-      }
+      await getAPICall('$baseURL/file/set_password?file_code=$fileCode&file_password=$password&sess_id=$sessionId');
     } else {
-      // String folderID = item['fld_id'].toString();
-      print("Only Files are able to share.");
+      String folderToken = item['fld_token'];
+      await getAPICall('$baseURL/folder/set_password?fld_token=$folderToken&fld_password=$password&sess_id=$sessionId');
     }
   }
 
