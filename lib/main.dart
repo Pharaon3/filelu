@@ -382,23 +382,23 @@ class MainPage extends StatefulWidget {
 }
 
 class _MainPageState extends State<MainPage> {
-  int _tabSelected = 0;
   MainFeature mainFeature = MainFeature();
 
   @override
   void initState() {
     super.initState();
+    mainFeature.onTabChanged = _onItemTapped;
   }
 
   // Handle navigation between pages
   void _onItemTapped(int index) {
     setState(() {
-      _tabSelected = index;
+      mainFeature._tabSelected = index;
     });
   }
 
   Widget _getPageContent() {
-    switch (_tabSelected) {
+    switch (mainFeature._tabSelected) {
       case 0:
         return MyFilesPage(mainFeature: mainFeature,);
       case 1:
@@ -419,7 +419,7 @@ class _MainPageState extends State<MainPage> {
       body: _getPageContent(),
       bottomNavigationBar: BottomNavigationBar(
         backgroundColor: Colors.white,
-        currentIndex: _tabSelected,
+        currentIndex: mainFeature._tabSelected,
         selectedItemColor: Colors.blue,
         unselectedItemColor: Colors.grey, // Set the color for unselected items
         onTap: _onItemTapped,
@@ -1326,15 +1326,9 @@ class _MyFilesPageState extends State<MyFilesPage> {
                                           shortenName(file['name']),
                                           style: TextStyle(fontWeight: FontWeight.bold),
                                         ),
-                                        if(file['only_me'].toString() == '1')
                                         Text(
-                                          'Only Me',  // Replace 'size' with the actual field you want to display
-                                          style: TextStyle(color: Colors.grey, fontSize: 12),
-                                        )
-                                        else
-                                        SizedBox(height: 4), // Space between the file name and the additional data
-                                        Text(
-                                          file['size'] ?? 'Size not available',  // Replace 'size' with the actual field you want to display
+                                          (file['size'] ?? 'Size not available') + 
+                                          (file['only_me'].toString() == '1' ? ' | Only Me' : ''),
                                           style: TextStyle(color: Colors.grey, fontSize: 12),
                                         ),
                                         Text(
@@ -2444,6 +2438,7 @@ class _MyFilesPageState extends State<MyFilesPage> {
             "folderID": visitedFolderIDs.last.first.toString()
           });
         }
+        mainFeature.changeTab(2);
       }
     } catch (e) {
       // Handle error
@@ -2798,6 +2793,7 @@ class _MyFilesPageState extends State<MyFilesPage> {
         }
         
         mainFeature.uploadFolder(selectedDirectory, folderID);
+        mainFeature.changeTab(2);
         print("All files in the folder added to upload queue.");
       } else {
         print("Folder selection canceled.");
@@ -3905,6 +3901,15 @@ class MainFeature {
   DateTime lastBackupDate = DateTime.now();
   int lastScanCount = -1;
   dynamic userInfo = {};
+  int _tabSelected = 0;
+
+  void Function(int)? onTabChanged;
+
+  void changeTab(int index) {
+    if (onTabChanged != null) {
+      onTabChanged!(index);
+    }
+  }
 
   Future<void> initState() async {
     if (isFirstCall) {
