@@ -1200,7 +1200,7 @@ class _MyFilesPageState extends State<MyFilesPage> {
                                   .map((folder) {
                                     bool isSelected = selectedItems.contains(folder);
                                     bool isCrypted = folder['fld_encrypted'].toString() == "1";
-                                    bool isPublic = folder['fld_public'].toString() == "1";
+                                    bool isPublic = folder['fld_public'].toString() == "0";
 
                                     return Column(
                                       children: [
@@ -1729,6 +1729,7 @@ class _MyFilesPageState extends State<MyFilesPage> {
             setState(() {
               isLoading = true;
             });
+            String downloadPath = await getDownloadDirectory();
             String subpath = visitedFolderIDs
               .map((entry) => entry[1])
               .where((path) => path.isNotEmpty)
@@ -1738,10 +1739,10 @@ class _MyFilesPageState extends State<MyFilesPage> {
                 mainFeature.addDownloadingQueue({
                   "fileCode": item['file_code'], 
                   "fileName": item['name'], 
-                  "filePath": subpath
+                  "filePath": downloadPath
                 });
               } else {
-                await mainFeature.downloadFolder(item['fld_id'], "$subpath/${item['name']}");
+                await mainFeature.downloadFolder(item['fld_id'], "$downloadPath/${item['name']}");
               }
             } else {
               for (dynamic selectedItem in selectedItems) {
@@ -1749,14 +1750,13 @@ class _MyFilesPageState extends State<MyFilesPage> {
                   mainFeature.addDownloadingQueue({
                     "fileCode": selectedItem['file_code'], 
                     "fileName": selectedItem['name'], 
-                    "filePath": subpath
+                    "filePath": downloadPath
                   });
                 } else {
-                  await mainFeature.downloadFolder(selectedItem['fld_id'], "$subpath/${selectedItem['name']}");
+                  await mainFeature.downloadFolder(selectedItem['fld_id'], "$downloadPath/${selectedItem['name']}");
                 }
               }
             }
-            String downloadPath = await getDownloadDirectory();
             setState(() {
               selectedItems = [];
               isLoading = false;
@@ -4083,7 +4083,6 @@ class MainFeature {
       }
       if (downloadQueue.isNotEmpty && downloadQueue.length > currentDownloadingItemIndex) {
         downloadFile(currentDownloadingItemIndex);
-        currentDownloadingItemIndex ++;
       }
     }
     
@@ -4107,9 +4106,9 @@ class MainFeature {
             print("finally");
             if (currentUploadingItemIndex + currentDownloadingItemIndex > lastScanCount) {
               print("finally - if");
-              dynamic scanedData = await _scanCloudFiles("", "0");
-              syncedFileFolders = scanedData;
-              _saveGlobal('scaned_data', scanedData);
+              // dynamic scanedData = await _scanCloudFiles("", "0");
+              // syncedFileFolders = scanedData;
+              // _saveGlobal('scaned_data', scanedData);
             }
             isSyncing = false;
             lastScanCount = currentUploadingItemIndex + currentDownloadingItemIndex;
@@ -4118,7 +4117,7 @@ class MainFeature {
       }
     }
 
-    await Future.delayed(Duration(seconds: 3));
+    await Future.delayed(Duration(seconds: 10));
     await _infinitCycling();
   }
 
@@ -4352,6 +4351,7 @@ class MainFeature {
         if (!status.isGranted) {
           print("Storage permission denied");
           downloadQueue[index]['isRemoved'] = true;
+          currentDownloadingItemIndex ++;
           return;
         }
       }
@@ -4381,6 +4381,7 @@ class MainFeature {
             streamedResponse.stream.listen(null).cancel(); // Cancel stream
             await sink.close();
             file.deleteSync(); // Delete incomplete file
+            currentDownloadingItemIndex ++;
             return;
           }
 
@@ -4403,6 +4404,7 @@ class MainFeature {
     } catch (e) {
       print("Error downloading file: $e");
     } finally {
+      currentDownloadingItemIndex ++;
       activeDownloads.remove(index); // Remove from active downloads after completion
     }
   }
