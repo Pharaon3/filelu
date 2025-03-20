@@ -1200,7 +1200,7 @@ class _MyFilesPageState extends State<MyFilesPage> {
                                   .map((folder) {
                                     bool isSelected = selectedItems.contains(folder);
                                     bool isCrypted = folder['fld_encrypted'].toString() == "1";
-                                    bool isPublic = folder['fld_public'].toString() == "0";
+                                    bool isPublic = folder['fld_only_me'].toString() == "1";
 
                                     return Column(
                                       children: [
@@ -3997,11 +3997,10 @@ class MainFeature {
 
       if (response.statusCode == 200) {
         return response;
-      } else if (response.statusCode == 404) {
+      } else {
         isOffline = true;
       }
     } catch (e) {
-      print('API call failed: $e');
       isOffline = true;
     }
   }
@@ -4107,9 +4106,9 @@ class MainFeature {
             print("finally");
             if (currentUploadingItemIndex + currentDownloadingItemIndex > lastScanCount) {
               print("finally - if");
-              // dynamic scanedData = await _scanCloudFiles("", "0");
-              // syncedFileFolders = scanedData;
-              // _saveGlobal('scaned_data', scanedData);
+              dynamic scanedData = await _scanCloudFiles("", "0");
+              syncedFileFolders = scanedData;
+              _saveGlobal('scaned_data', scanedData);
             }
             isSyncing = false;
             lastScanCount = currentUploadingItemIndex + currentDownloadingItemIndex;
@@ -4277,11 +4276,7 @@ class MainFeature {
   }
 
   Future<void> moveFile(String fileCode, String folderID) async {
-    try {
-      await http.get(Uri.parse('$baseURL/file/set_folder?file_code=$fileCode&fld_id=$folderID&sess_id=$sessionId'));
-    } catch (e) {
-      isOffline = true;
-    }
+    await getAPICall('$baseURL/file/set_folder?file_code=$fileCode&fld_id=$folderID&sess_id=$sessionId');
   }
 
   Future<String> getFolderID(String folderName, String parentFolderID) async {
@@ -4348,6 +4343,7 @@ class MainFeature {
       String downloadLink = await _getDownloadLink(fileCode);
 
       if (Platform.isAndroid) {
+        _requestStoragePermission();
         var status = await Permission.storage.request();
         if (!status.isGranted) {
           print("Storage permission denied");
@@ -4458,13 +4454,7 @@ class MainFeature {
   Future<void> removeCloudItem(dynamic item) async {
     if(item.containsKey('file_code')) {
       String fileCode = item['file_code'].toString();
-      final response = await http.get(
-        Uri.parse('$baseURL/file/remove?file_code=$fileCode&remove=1&sess_id=$sessionId'),
-      );
-      if (response.statusCode == 200) {
-      } else {
-        isOffline = true;
-      }
+      await getAPICall('$baseURL/file/remove?file_code=$fileCode&remove=1&sess_id=$sessionId');
     } else {
       String folderID = item['fld_id'].toString();
       await removeFolder(folderID);
@@ -4530,6 +4520,7 @@ class MainFeature {
         await _onewaySync(order.localPath, order.fld_id);
         break;
       case "Two-Way Sync":
+        print("syncedFileFolders: $syncedFileFolders");
         await _twowaySync(order.localPath, order.fld_id, _findFolderData(syncedFileFolders, order.fld_id));
         break;
     }
@@ -4538,21 +4529,10 @@ class MainFeature {
   Future<dynamic> _scanCloudFiles(String folderName, String fldID) async {
     dynamic scanedData = {};
     // Update synced files.
-    final response = await getAPICall('$baseURL/folder/list?fld_id=$fldID&sess_id=$sessionId');
+    final response = await getAPICall('$baseURL/folder/list2?page=1&per_page=25&folder_id=$fldID&sess_id=$sessionId');
     var data = jsonDecode(response.body);
-    List<String> cloudFiles = List<String>.from(data['result']['files'].map((file) => file['name']));
-    List<String> cloudFileCodes = List<String>.from(data['result']['files'].map((file) => file['file_code'].toString()));
-    List<String> cloudFolders = List<String>.from(data['result']['folders'].map((file) => file['name']));
-    List<String> cloudFolderIDs = List<String>.from(data['result']['folders'].map((file) => file['fld_id'].toString()));
-    scanedData['file'] = cloudFiles.asMap().map((i, f) => MapEntry(f, cloudFileCodes[i]));
-    scanedData['folder'] = [];
-    for (int i = 0; i < cloudFolders.length; i ++) {
-      String cloudFolder = cloudFolders[i];
-      String cloudFolderID = cloudFolderIDs[i];
-      dynamic cloudFolderData = await _scanCloudFiles(cloudFolder, cloudFolderID);
-      scanedData['folder'].add(cloudFolderData);
-    }
-    return {"folder_name": folderName, "folder_id": fldID, "folder_data": scanedData};
+    scanedData = data['result'];
+    return {"folder_name": folderName, "folder_id": fldID, "content": scanedData};
 
   }
 
@@ -4630,13 +4610,13 @@ class MainFeature {
 
     if (folderData == {} || folderData == null || folderData == "") {
       await uploadFolder(localPath, folderID);
-      await downloadFolder(localPath, folderID);
+      await downloadFolder(folderID, localPath);
       return;
     }
 
     if (!folderData.containsKey('file') && !folderData.containsKey('folder')) {
       await uploadFolder(localPath, folderID);
-      await downloadFolder(localPath, folderID);
+      await downloadFolder(folderID, localPath);
       return;
     }
 
@@ -4646,7 +4626,7 @@ class MainFeature {
 
     List<String> syncFolderNames = syncFolders.map((folder) => folder['folder_name'] as String).toList();
     syncFolderCodes = syncFolders.map((folder) => folder['folder_id'] as String).toList();
-    List<dynamic> syncFolderDatas = syncFolders.map((folder) => folder['folder_data'] as dynamic).toList();
+    List<dynamic> syncFolderDatas = syncFolders.map((folder) => folder['content'] as dynamic).toList();
 
     Directory dir = Directory(localPath);
     if (dir.existsSync()) {
@@ -4754,14 +4734,14 @@ class MainFeature {
     if (fileFolder.isEmpty) return null; // Changed to return null for easier checks
 
     // Check if the current folder matches the fldID
-    if (fileFolder['folder_id'] == fldID) return fileFolder['folder_data'];
+    if (fileFolder['folder_id'].toString() == fldID) return fileFolder['content'];
 
-    // Check if folder_data exists and is a map
-    if (!fileFolder.containsKey('folder_data') || 
-        fileFolder['folder_data'] is! Map) return null;
+    // Check if content exists and is a map
+    if (!fileFolder.containsKey('content') || 
+        fileFolder['content'] is! Map) return null;
 
-    // Iterate over the list of folders in folder_data
-    var folders = fileFolder['folder_data']['folder'];
+    // Iterate over the list of folders in content
+    var folders = fileFolder['content']['folders'];
     if (folders is! List) return null; // Ensure it's a list
 
     for (dynamic newFileFolder in folders) {
