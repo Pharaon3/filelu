@@ -645,7 +645,7 @@ class _MyFilesPageState extends State<MyFilesPage> {
     int totalItems = folders.length + files.length;
     bool selectionMode = selectedItems.isNotEmpty; // Enable selection mode if items are selected
 
-    String shortenName(String name, {int maxLength = 10}) {
+    String shortenName(String name, {int maxLength = 20}) {
       if (name.length > maxLength) {
         return '${name.substring(0, maxLength)}...'; // Append ellipsis if truncated
       }
@@ -4031,7 +4031,7 @@ class MainFeature {
   }
 
   void addDownloadingQueue(dynamic downloadingItem){
-    for (int i = currentDownloadingItemIndex; i < downloadQueue.length; i ++) {
+    for (int i = 0; i < downloadQueue.length; i ++) {
       if (downloadQueue[i]['fileCode'] == downloadingItem['fileCode']
        && downloadQueue[i]['fileName'] == downloadingItem['fileName']
        && downloadQueue[i]['filePath'] == downloadingItem['filePath']) {
@@ -4083,6 +4083,7 @@ class MainFeature {
       }
       if (downloadQueue.isNotEmpty && downloadQueue.length > currentDownloadingItemIndex) {
         downloadFile(currentDownloadingItemIndex);
+        currentDownloadingItemIndex ++;
       }
     }
     
@@ -4351,7 +4352,6 @@ class MainFeature {
         if (!status.isGranted) {
           print("Storage permission denied");
           downloadQueue[index]['isRemoved'] = true;
-          currentDownloadingItemIndex ++;
           return;
         }
       }
@@ -4381,7 +4381,6 @@ class MainFeature {
             streamedResponse.stream.listen(null).cancel(); // Cancel stream
             await sink.close();
             file.deleteSync(); // Delete incomplete file
-            currentDownloadingItemIndex ++;
             return;
           }
 
@@ -4404,7 +4403,7 @@ class MainFeature {
     } catch (e) {
       print("Error downloading file: $e");
     } finally {
-      currentDownloadingItemIndex ++;
+      downloadQueue[index]['isRemoved'] = true;
       activeDownloads.remove(index); // Remove from active downloads after completion
     }
   }
@@ -4439,7 +4438,8 @@ class MainFeature {
   
   Future<void> createFolderIfNotExists(String path) async {
     String parentDirectory = await getDownloadDirectory();
-    final directory = Directory("$parentDirectory/$path");
+    // final directory = Directory("$parentDirectory/$path");
+    final directory = Directory(path);
 
     // Check if the directory exists
     if (await directory.exists()) {
