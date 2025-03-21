@@ -388,12 +388,19 @@ class _MainPageState extends State<MainPage> {
   void initState() {
     super.initState();
     mainFeature.onTabChanged = _onItemTapped;
+    mainFeature.onSetOffline = _onOffline;
   }
 
   // Handle navigation between pages
   void _onItemTapped(int index) {
     setState(() {
       mainFeature._tabSelected = index;
+    });
+  }
+
+  void _onOffline(bool offline) {
+    setState(() {
+      mainFeature.isOffline = offline;
     });
   }
 
@@ -3884,9 +3891,7 @@ class _OffLineState extends State<OffLine> {
               SizedBox(height: 20),
               ElevatedButton(
                 onPressed: () {
-                  mainFeature.isFirstCall = true;
-                  mainFeature.initState();
-                  Navigator.pop(context);
+                  mainFeature.setOffline(false);
                 },
                 child: Text("Retry"),
               ),
@@ -3972,6 +3977,7 @@ class MainFeature {
   int _tabSelected = 0;
 
   void Function(int)? onTabChanged;
+  void Function(bool)? onSetOffline;
 
   void changeTab(int index) {
     if (onTabChanged != null) {
@@ -3979,6 +3985,12 @@ class MainFeature {
     }
   }
 
+  void setOffline(bool offline) {
+    if (onSetOffline != null) {
+      onSetOffline!(offline);
+    }
+  }
+  
   Future<void> initState() async {
     if (isFirstCall) {
       isOffline = false;
@@ -3994,14 +4006,35 @@ class MainFeature {
   dynamic getAPICall(String url) async {
     try {
       final response = await http.get(Uri.parse(url));
-
       if (response.statusCode == 200) {
         return response;
       } else {
-        isOffline = true;
+        try {
+          final response = await http.get(Uri.parse(url));
+          if (response.statusCode == 200) {
+            return response;
+          } else {
+            print("Offline");
+            setOffline(true);
+          }
+        } catch (e) {
+            print("Offline");
+          setOffline(true);
+        }
       }
     } catch (e) {
-      isOffline = true;
+      try {
+        final response = await http.get(Uri.parse(url));
+        if (response.statusCode == 200) {
+          return response;
+        } else {
+            print("Offline");
+          setOffline(true);
+        }
+      } catch (e) {
+            print("Offline");
+        setOffline(true);
+      }
     }
   }
 
@@ -4127,7 +4160,7 @@ class MainFeature {
       var data = jsonDecode(response.body);
       serverUrl = data['result'];
     } catch (e) {
-      isOffline = true;
+      setOffline(true);
       print("Error fetching upload server: $e");
     }
   }
@@ -4139,7 +4172,7 @@ class MainFeature {
       userInfo = data['result'];
     } catch (e) {
       print("Error fetching user info: $e");
-      isOffline = true;
+      setOffline(true);
       userInfo = "";
     }
   }
@@ -4216,13 +4249,13 @@ class MainFeature {
         return responseData[0]['file_code'];
       } else {
         print("Upload failed: ${response.reasonPhrase}");
-        isOffline = true;
+        setOffline(true);
         uploadQueue[index]['isRemoved'] = true;
       }
     } catch (e) {
       print("Upload error: $e");
       uploadQueue[index]['isRemoved'] = true;
-      isOffline = true;
+      setOffline(true);
     }
     return "went wrong";
   }
@@ -4580,7 +4613,7 @@ class MainFeature {
         try {
           await http.get(Uri.parse('$baseURL/file/remove?file_code=${cloudFileCodes[i]}&remove=1&sess_id=$sessionId'));
         } catch (e) {
-          isOffline = true;
+          setOffline(true);
         }
       }
     }
