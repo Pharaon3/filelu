@@ -911,196 +911,196 @@ class _MyFilesPageState extends State<MyFilesPage> {
                     controller: _scrollController,
                     physics: AlwaysScrollableScrollPhysics(), // Ensures pull-to-refresh always works
                     child: Padding(
-                    padding: EdgeInsets.all(8.0),
-                    child: ConstrainedBox(
-                      constraints: BoxConstraints(
-                        minHeight: constraints.maxHeight, // Ensure minimum height is screen height
-                      ),
-                      child: Column(
-                        children: [
-                          if (getPaginatedItems().isNotEmpty) ...[
-                            GridView.builder(
-                              shrinkWrap: true, // Ensures it takes only necessary space
-                              physics: NeverScrollableScrollPhysics(), // Prevents inner scrolling conflict
-                              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                                crossAxisCount: 3, // Set number of columns
-                                crossAxisSpacing: 2,
-                                mainAxisSpacing: 2,
-                                childAspectRatio: 1.2,
-                              ),
-                              itemCount: getPaginatedItems().length,
-                              itemBuilder: (context, index) {
-                                final item = getPaginatedItems()[index];
-                                bool isSelected = selectedItems.contains(item);
-                                bool isPrivate = item['link_pass'].toString() == "1";
-                                bool isOnlyMe = item['only_me'].toString() == "1";
-                                bool isFolder = !item.containsKey('file_code');
-                                bool isCrypted = (item.containsKey('file_code') && item['encrypted'].toString() != "null") || item['fld_encrypted'].toString() == "1";
+                      padding: EdgeInsets.all(8.0),
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(
+                          minHeight: constraints.maxHeight, // Ensure minimum height is screen height
+                        ),
+                        child: Column(
+                          children: [
+                            if (getPaginatedItems().isNotEmpty) ...[
+                              GridView.builder(
+                                shrinkWrap: true, // Ensures it takes only necessary space
+                                physics: NeverScrollableScrollPhysics(), // Prevents inner scrolling conflict
+                                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                                  crossAxisCount: 3, // Set number of columns
+                                  crossAxisSpacing: 2,
+                                  mainAxisSpacing: 2,
+                                  childAspectRatio: 1.2,
+                                ),
+                                itemCount: getPaginatedItems().length,
+                                itemBuilder: (context, index) {
+                                  final item = getPaginatedItems()[index];
+                                  bool isSelected = selectedItems.contains(item);
+                                  bool isPrivate = item['link_pass'].toString() == "1";
+                                  bool isOnlyMe = item['only_me'].toString() == "1";
+                                  bool isFolder = !item.containsKey('file_code');
+                                  bool isCrypted = (item.containsKey('file_code') && item['encrypted'].toString() != "null") || item['fld_encrypted'].toString() == "1";
 
-                                return GestureDetector(
-                                  onLongPress: () => toggleSelectionMode(item),
-                                  onTap: () {
-                                    if (selectionMode) {
-                                      toggleSelectionMode(item);
-                                    } else {
-                                      item.containsKey('file_code')
-                                          ? openCloudFile(listContext, item['file_code'], item['name'])
-                                          : _openCloudFolder(context, item);
-                                    }
-                                  },
-                                  child: Container(
-                                    decoration: BoxDecoration(
-                                      border: Border.all(
-                                        color: Colors.grey, // Border color
-                                        width: 0.5, // Border width
-                                      ),
-                                      borderRadius: BorderRadius.circular(8), // Optional: rounded corners
-                                    ),
-                                    child: GridTile(
-                                      header: Align(
-                                        alignment: Alignment.topRight,
-                                        child: IconButton(
-                                          icon: Icon(
-                                            selectionMode
-                                                ? (isSelected ? Icons.check_circle : Icons.radio_button_unchecked)
-                                                : Icons.more_vert,
-                                            color: isSelected ? Colors.blue : null,
-                                          ),
-                                          onPressed: selectionMode
-                                              ? () => toggleSelectionMode(item)
-                                              : () => _showOptions(context, item),
+                                  return GestureDetector(
+                                    onLongPress: () => toggleSelectionMode(item),
+                                    onTap: () {
+                                      if (selectionMode) {
+                                        toggleSelectionMode(item);
+                                      } else {
+                                        item.containsKey('file_code')
+                                            ? openCloudFile(listContext, item['file_code'], item['name'])
+                                            : _openCloudFolder(context, item);
+                                      }
+                                    },
+                                    child: Container(
+                                      decoration: BoxDecoration(
+                                        border: Border.all(
+                                          color: Colors.grey, // Border color
+                                          width: 0.5, // Border width
                                         ),
+                                        borderRadius: BorderRadius.circular(8), // Optional: rounded corners
                                       ),
-                                      child: Column(
-                                        mainAxisAlignment: MainAxisAlignment.center,
-                                        children: [
-                                          Stack(
-                                            children: [
-                                              item.containsKey('file_code')
-                                                  ? Image.network(
-                                                      item['thumbnail'],
-                                                      width: 60,
-                                                      height: 60,
-                                                      fit: BoxFit.cover,
-                                                      errorBuilder: (context, error, stackTrace) {
-                                                        return getFileIcon(item['name']);
-                                                      },
-                                                    )
-                                                  : Icon(
-                                                      Icons.folder,
-                                                      size: 60,
-                                                      color: isSelected ? Colors.cyan : Colors.blue,
-                                                    ),
-                                              // Lock Icon for Private Files
-                                              if (isPrivate)
-                                                Positioned(
-                                                  top: -5,
-                                                  left: -5,
-                                                  child: Container(
-                                                    padding: EdgeInsets.all(4),
-                                                    child: Icon(
-                                                      Icons.lock,
-                                                      size: 16,
-                                                      color: Colors.green,
-                                                    ),
-                                                  ),
-                                                ),
-                                              if (isFolder)
-                                                if (item["total_files"].toString() != "null")
+                                      child: GridTile(
+                                        header: Align(
+                                          alignment: Alignment.topRight,
+                                          child: IconButton(
+                                            icon: Icon(
+                                              selectionMode
+                                                  ? (isSelected ? Icons.check_circle : Icons.radio_button_unchecked)
+                                                  : Icons.more_vert,
+                                              color: isSelected ? Colors.blue : null,
+                                            ),
+                                            onPressed: selectionMode
+                                                ? () => toggleSelectionMode(item)
+                                                : () => _showOptions(context, item),
+                                          ),
+                                        ),
+                                        child: Column(
+                                          mainAxisAlignment: MainAxisAlignment.center,
+                                          children: [
+                                            Stack(
+                                              children: [
+                                                item.containsKey('file_code')
+                                                    ? Image.network(
+                                                        item['thumbnail'],
+                                                        width: 60,
+                                                        height: 60,
+                                                        fit: BoxFit.cover,
+                                                        errorBuilder: (context, error, stackTrace) {
+                                                          return getFileIcon(item['name']);
+                                                        },
+                                                      )
+                                                    : Icon(
+                                                        Icons.folder,
+                                                        size: 60,
+                                                        color: isSelected ? Colors.cyan : Colors.blue,
+                                                      ),
+                                                // Lock Icon for Private Files
+                                                if (isPrivate)
                                                   Positioned(
-                                                    top: 6,
-                                                    left: 6,
+                                                    top: -5,
+                                                    left: -5,
                                                     child: Container(
                                                       padding: EdgeInsets.all(4),
-                                                      decoration: BoxDecoration(
+                                                      child: Icon(
+                                                        Icons.lock,
+                                                        size: 16,
                                                         color: Colors.green,
-                                                        shape: BoxShape.circle,
-                                                      ),
-                                                      child: Text(
-                                                        item["total_files"].toString(),
-                                                        style: TextStyle(
-                                                            color: Colors.white,
-                                                            fontSize: 12,
-                                                            fontWeight: FontWeight.bold),
                                                       ),
                                                     ),
                                                   ),
-                                              if (isCrypted)
-                                                Positioned(
-                                                  bottom: 8, // Adjust this value to position it just below the icon
-                                                  left: 0,
-                                                  right: 0,
-                                                  child: IntrinsicWidth(
-                                                    // Ensures the width fits the content
-                                                    child: Container(
-                                                      padding:
-                                                          EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                                      decoration: BoxDecoration(
-                                                        color: Colors.green,
-                                                        borderRadius: BorderRadius.circular(8),
-                                                      ),
-                                                      child: Center(
-                                                        // Ensures the text is centered inside the container
+                                                if (isFolder)
+                                                  if (item["total_files"].toString() != "null")
+                                                    Positioned(
+                                                      top: 6,
+                                                      left: 6,
+                                                      child: Container(
+                                                        padding: EdgeInsets.all(4),
+                                                        decoration: BoxDecoration(
+                                                          color: Colors.green,
+                                                          shape: BoxShape.circle,
+                                                        ),
                                                         child: Text(
-                                                          "SSCE",
-                                                          textAlign: TextAlign.center,
+                                                          item["total_files"].toString(),
                                                           style: TextStyle(
-                                                            color: Color.fromARGB(255, 180, 243, 168),
-                                                            fontSize: 10,
-                                                            fontWeight: FontWeight.bold,
+                                                              color: Colors.white,
+                                                              fontSize: 12,
+                                                              fontWeight: FontWeight.bold),
+                                                        ),
+                                                      ),
+                                                    ),
+                                                if (isCrypted)
+                                                  Positioned(
+                                                    bottom: 8, // Adjust this value to position it just below the icon
+                                                    left: 0,
+                                                    right: 0,
+                                                    child: IntrinsicWidth(
+                                                      // Ensures the width fits the content
+                                                      child: Container(
+                                                        padding:
+                                                            EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                        decoration: BoxDecoration(
+                                                          color: Colors.green,
+                                                          borderRadius: BorderRadius.circular(8),
+                                                        ),
+                                                        child: Center(
+                                                          // Ensures the text is centered inside the container
+                                                          child: Text(
+                                                            "SSCE",
+                                                            textAlign: TextAlign.center,
+                                                            style: TextStyle(
+                                                              color: Color.fromARGB(255, 180, 243, 168),
+                                                              fontSize: 10,
+                                                              fontWeight: FontWeight.bold,
+                                                            ),
                                                           ),
                                                         ),
                                                       ),
                                                     ),
                                                   ),
-                                                ),
-                                              // Selection Overlay
-                                              if (isSelected)
-                                                Positioned.fill(
-                                                  child: Container(
-                                                    color: Colors.blue.withOpacity(0.5),
-                                                    child: Icon(Icons.check, color: Colors.white, size: 40),
+                                                // Selection Overlay
+                                                if (isSelected)
+                                                  Positioned.fill(
+                                                    child: Container(
+                                                      color: Colors.blue.withOpacity(0.5),
+                                                      child: Icon(Icons.check, color: Colors.white, size: 40),
+                                                    ),
                                                   ),
-                                                ),
-                                            ],
-                                          ),
-                                          SizedBox(height: 8),
-                                          Text(
-                                            isOnlyMe ? "${item['name']} (Only Me)" : item['name'],
-                                            textAlign: TextAlign.center,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: TextStyle(fontWeight: FontWeight.bold),
-                                          ),
-                                        ],
+                                              ],
+                                            ),
+                                            SizedBox(height: 8),
+                                            Text(
+                                              isOnlyMe ? "${item['name']} (Only Me)" : item['name'],
+                                              textAlign: TextAlign.center,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: TextStyle(fontWeight: FontWeight.bold),
+                                            ),
+                                          ],
+                                        ),
                                       ),
                                     ),
+                                  );
+                                },
+                              ),
+                            ] else ...[
+                              Center(
+                                child: Padding(
+                                  padding: EdgeInsets.all(16.0),
+                                  child: Text(
+                                    "This folder is empty",
+                                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                                   ),
-                                );
-                              },
-                            ),
-                          ] else ...[
-                            Center(
-                              child: Padding(
-                                padding: EdgeInsets.all(16.0),
-                                child: Text(
-                                  "This folder is empty",
-                                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                                 ),
                               ),
+                            ],
+
+                            // Add empty space **only if needed**
+                            Builder(
+                              builder: (context) {
+                                double totalItemsHeight = (getPaginatedItems().length / 3).ceil() * 100.0;
+                                double remainingHeight = constraints.maxHeight - totalItemsHeight;
+                                return remainingHeight > 0 ? SizedBox(height: remainingHeight) : SizedBox();
+                              },
                             ),
                           ],
-
-                          // Add empty space **only if needed**
-                          Builder(
-                            builder: (context) {
-                              double totalItemsHeight = (getPaginatedItems().length / 3).ceil() * 100.0;
-                              double remainingHeight = constraints.maxHeight - totalItemsHeight;
-                              return remainingHeight > 0 ? SizedBox(height: remainingHeight) : SizedBox();
-                            },
-                          ),
-                        ],
+                        ),
                       ),
-                    ),
                     ),
                   );
                 },
