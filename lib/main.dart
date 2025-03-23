@@ -422,6 +422,7 @@ class _MainPageState extends State<MainPage> {
   @override
   Widget build(BuildContext context) {
     if (mainFeature.isOffline) return OffLine(mainFeature: mainFeature);
+    if (mainFeature.sessionId == "" && mainFeature.isOffline == true) return LoginPage();
     return Scaffold(
       body: _getPageContent(),
       bottomNavigationBar: BottomNavigationBar(
@@ -1950,7 +1951,6 @@ class _MyFilesPageState extends State<MyFilesPage> {
   // Show text file content
   void _showTextFile(BuildContext context, File file) async {
     String content = await file.readAsString();
-    print("content: $content");
     showDialog(
       context: context,
       builder: (context) {
@@ -2211,11 +2211,9 @@ class _MyFilesPageState extends State<MyFilesPage> {
         var data = jsonDecode(response.body);
         String clonedFileCode = data['result']['filecode'];
         await mainFeature.getAPICall('$baseURL/file/set_folder?file_code=$clonedFileCode&fld_id=$folderID&sess_id=${mainFeature.sessionId}');
-        print('Successfully copied.');
       } else if (copyStatus == 2 && copiedFileFolder.containsKey('file_code')) { // move file.
         String fileCode = copiedFileFolder['file_code'];
         await mainFeature.getAPICall('$baseURL/file/set_folder?file_code=$fileCode&fld_id=$folderID&sess_id=${mainFeature.sessionId}');
-        print('Successfully moved.');
       } else if (copyStatus == 1 && !copiedFileFolder.containsKey('file_code')) { // copy folder.
         String copyFolderID = copiedFileFolder['fld_id'].toString();
         final response = await mainFeature.getAPICall('$baseURL/folder/copy?fld_id=$copyFolderID&sess_id=${mainFeature.sessionId}');
@@ -2223,13 +2221,10 @@ class _MyFilesPageState extends State<MyFilesPage> {
         String clonedFolderID = data['result']['fld_id'].toString();
         final response1 = await mainFeature.getAPICall('$baseURL/folder/move?fld_id=$clonedFolderID&dest_fld_id=$folderID&sess_id=${mainFeature.sessionId}');
         mainFeature.renameFile(jsonDecode(response1.body)['result'], copiedFileFolder['name']);
-        print('Successfully copied.');
       } else if (copyStatus == 2 && !copiedFileFolder.containsKey('file_code')) { // move folder.
         String moveFolderID = copiedFileFolder['fld_id'].toString();
         await mainFeature.getAPICall('$baseURL/folder/move?fld_id=$moveFolderID&dest_fld_id=$folderID&sess_id=${mainFeature.sessionId}');
-        print('Successfully moved.');
       } else {
-        print('Nothing to paste.');
       }
     }
     copyStatus = 0;
@@ -3296,10 +3291,16 @@ class _SyncPageState extends State<SyncPage> {
 
   Future<String?> _pickFolder() async {
     String? selectedFolder;
-    if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
+    final appDir = await getApplicationDocumentsDirectory();
+    if (Platform.isWindows || Platform.isMacOS || Platform.isLinux || Platform.isAndroid) {
       selectedFolder = await FilePicker.platform.getDirectoryPath();
-    } else if (Platform.isAndroid || Platform.isIOS) {
+    } else if (Platform.isIOS) {
       selectedFolder = await FilePicker.platform.getDirectoryPath();
+      print("selectedFolder: $selectedFolder");
+      if (selectedFolder != null && !selectedFolder.contains(appDir.path)) {
+        // showToast("Only folders inside FileLuSync are allowed. Please select again.");
+        return _pickFolder();
+      }
     }
     return selectedFolder;
   }
@@ -3436,185 +3437,6 @@ class _SyncPageState extends State<SyncPage> {
             ),
           ),
         ],
-      ),
-    );
-  }
-
-}
-
-class UploadPage extends StatefulWidget {
-  final MainFeature mainFeature;
-  UploadPage({required this.mainFeature});
-
-  @override
-  _UploadPageState createState() => _UploadPageState(mainFeature: mainFeature);
-}
-
-class _UploadPageState extends State<UploadPage> {
-  String uploadServer = "";
-  final MainFeature mainFeature;
-  bool isLoading = false;
-  List<String> selectedFiles = [];
-  double uploadProgress = 0.0; // Track upload progress
-  int uploadedItemCounts = 0;
-
-  _UploadPageState({required this.mainFeature});
-
-  @override
-  void initState() {
-    super.initState();
-    _initializeServerUrl();
-    timer();
-  }
-
-  Future<void> _initializeServerUrl() async {
-    try {
-      final response = await http.get(
-        Uri.parse('$baseURL/upload/server?sess_id=${mainFeature.sessionId}'),
-      );
-
-      if (response.statusCode == 200) {
-        var data = jsonDecode(response.body);
-        uploadServer = data['result'];
-      } else {
-        print("Failed to get upload server: ${response.reasonPhrase}");
-      }
-    } catch (e) {
-      print("Error fetching upload server: $e");
-    }
-  }
-
-  Future<void> uploadFiles() async{
-    if (selectedFiles.isEmpty) return;
-    setState(() {
-      isLoading = true;
-      uploadProgress = 0.0;
-    });
-    for (int i = 0; i< selectedFiles.length; i ++) {
-      String filePath = selectedFiles[i];
-      mainFeature.addUploadQueue({
-        "filePath": filePath,
-        "folderID": "0"
-      });
-      // await uploader.uploadFile(filePath, "0");
-      uploadedItemCounts ++;
-    }
-    setState(() {
-      selectedFiles = [];
-      isLoading = false;
-    });
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text("Files uploaded successfully!")),
-    );
-  }
-
-  Future<void> timer() async {
-    if (selectedFiles.isNotEmpty && isLoading == true) {
-      setState(() {
-        uploadProgress = min(uploadProgress + 0.005, (uploadedItemCounts + 1) / selectedFiles.length - 0.05);
-        uploadProgress = max(uploadProgress, uploadedItemCounts / selectedFiles.length);
-      });
-    }
-    await Future.delayed(Duration(milliseconds: 50)); // Simulated delay
-    timer();
-  }
-  
-  Future<String> getFolderID(String folderName, String parentFolderID) async {
-    final response = await mainFeature.getAPICall('$baseURL/folder/list?fld_id=$parentFolderID&sess_id=${mainFeature.sessionId}');
-    var data = jsonDecode(response.body);
-    List<String> cloudFolders = List<String>.from(data['result']['folders'].map((file) => file['name']));
-    List<String> cloudFolderCodes = List<String>.from(data['result']['folders'].map((file) => file['fld_id'].toString()));
-    for (int i = 0; i < cloudFolders.length; i ++) {
-      if (cloudFolders[i] == folderName) {
-        return cloudFolderCodes[i];
-      }
-    }
-    return "";
-  }
-
-  Future<void> _pickFiles() async {
-    setState(() {
-      isLoading = true;
-    });
-
-    // Pick files
-    try {
-      final result = await FilePicker.platform.pickFiles(allowMultiple: true);
-      if (result != null) {
-        setState(() {
-          selectedFiles = result.paths.map((path) => path!).toList();
-        });
-      }
-    } catch (e) {
-      // Handle error
-      print('Error picking files: $e');
-    } finally {
-      setState(() {
-        isLoading = false; // End loading
-      });
-    }
-  }
-
-  Future<void> moveFile(String fileCode, String folderID) async {
-    await http.get(Uri.parse('$baseURL/file/set_folder?file_code=$fileCode&fld_id=$folderID&sess_id=${mainFeature.sessionId}'));
-  }
-
-  Future<String> createCloudFolder(String localFolder, String parentId) async {
-    final response = await mainFeature.getAPICall('$baseURL/folder/create?parent_id=$parentId&name=$localFolder&sess_id=${mainFeature.sessionId}');
-    var data = jsonDecode(response.body);
-    return data['result']['fld_id'].toString();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        title: Text('Upload Files')
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          children: [
-            ElevatedButton(
-              onPressed: _pickFiles,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.blue, // Set background color to blue
-              ), // Disable button while uploading
-              child: Text(
-                'Select Files',
-                style: TextStyle(color: Colors.white),
-              ),
-            ),
-            SizedBox(height: 20),
-            Expanded(
-              child: ListView.builder(
-                itemCount: selectedFiles.length,
-                itemBuilder: (context, index) {
-                  return ListTile(
-                    title: Text(selectedFiles[index].split(r'\').last.split('/').last),
-                  );
-                },
-              ),
-            ),
-            if (isLoading) // Show progress bar when uploading
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 10.0),
-                child: LinearProgressIndicator(value: uploadProgress, color: Colors.blue,),
-              ),
-            ElevatedButton(
-              onPressed: isLoading ? null : uploadFiles,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.blue, // Set background color to blue
-              ), // Disable button while uploading
-              child: Text(
-                'Upload Files',
-                style: TextStyle(color: Colors.white), // Set text color to white
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }
@@ -4008,17 +3830,27 @@ class MainFeature {
       final response = await http.get(Uri.parse(url));
       if (response.statusCode == 200) {
         return response;
+      } else if (response.statusCode == 403) {
+        print("Offline");
+        final prefs = await SharedPreferences.getInstance();
+        prefs.setString('sessionId', "");
+        setOffline(true);
       } else {
         try {
           final response = await http.get(Uri.parse(url));
           if (response.statusCode == 200) {
             return response;
+          } else if (response.statusCode == 403) {
+            print("Offline");
+            final prefs = await SharedPreferences.getInstance();
+            prefs.setString('sessionId', "");
+            setOffline(true);
           } else {
             print("Offline");
             setOffline(true);
           }
         } catch (e) {
-            print("Offline");
+          print("Offline");
           setOffline(true);
         }
       }
@@ -4027,12 +3859,17 @@ class MainFeature {
         final response = await http.get(Uri.parse(url));
         if (response.statusCode == 200) {
           return response;
+        } else if (response.statusCode == 403) {
+          print("Offline");
+          final prefs = await SharedPreferences.getInstance();
+          prefs.setString('sessionId', "");
+          setOffline(true);
         } else {
-            print("Offline");
+          print("Offline");
           setOffline(true);
         }
       } catch (e) {
-            print("Offline");
+        print("Offline");
         setOffline(true);
       }
     }
