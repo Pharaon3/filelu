@@ -959,14 +959,17 @@ class _MyFilesPageState extends State<MyFilesPage> {
                                       child: GridTile(
                                         header: Align(
                                           alignment: Alignment.topRight,
-                                          child: IconButton(
-                                            icon: Icon(
+                                          child: InkWell(
+                                          child: Padding(
+                                            padding: const EdgeInsets.symmetric(horizontal: 4,vertical: 8),
+                                            child: Icon(
                                               selectionMode
                                                   ? (isSelected ? Icons.check_circle : Icons.radio_button_unchecked)
                                                   : Icons.more_vert,
                                               color: isSelected ? Colors.blue : null,
                                             ),
-                                            onPressed: selectionMode
+                                          ),
+                                          onTap: selectionMode
                                                 ? () => toggleSelectionMode(item)
                                                 : () => _showOptions(context, item),
                                           ),
