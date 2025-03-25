@@ -1789,7 +1789,7 @@ class _MyFilesPageState extends State<MyFilesPage> {
                   "filePath": downloadPath
                 });
               } else {
-                await mainFeature.downloadFolder(item['fld_id'], "$downloadPath/${item['name']}");
+                await mainFeature.downloadFolder(item['fld_id'].toString(), "$downloadPath/${item['name']}");
               }
             } else {
               for (dynamic selectedItem in selectedItems) {
