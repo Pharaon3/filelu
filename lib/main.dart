@@ -2275,17 +2275,6 @@ class _MyFilesPageState extends State<MyFilesPage> {
     });
   }
 
-  Future<void> createFolderIfNotExists(String path) async {
-    final directory = Directory(path);
-
-    // Check if the directory exists
-    if (await directory.exists()) {
-    } else {
-      // Create the directory
-      await directory.create(recursive: true);
-    }
-  }
-
   // Fetch files and folders using the API
   Future<dynamic> fetchFilesAndFolders(fldId) async {
     final response = await mainFeature.getAPICall('$baseURL/folder/list?fld_id=${fldId.toString()}&sess_id=${mainFeature.sessionId}');
@@ -3363,17 +3352,6 @@ class _SyncPageState extends State<SyncPage> {
     final response = await mainFeature.getAPICall('$baseURL/folder/create?parent_id=$parentId&name=$localFolder&sess_id=${mainFeature.sessionId}');
     var data = jsonDecode(response.body);
     return data['result']['fld_id'].toString();
-  }
-
-  Future<void> createFolderIfNotExists(String path) async {
-    final directory = Directory(path);
-
-    // Check if the directory exists
-    if (await directory.exists()) {
-    } else {
-      // Create the directory
-      await directory.create(recursive: true);
-    }
   }
 
   String abbreviate(String path, {int maxLength = 25}) {
