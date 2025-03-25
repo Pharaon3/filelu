@@ -389,6 +389,7 @@ class _MainPageState extends State<MainPage> {
     super.initState();
     mainFeature.onTabChanged = _onItemTapped;
     mainFeature.onSetOffline = _onOffline;
+    _checkPermissions();
   }
 
   // Handle navigation between pages
@@ -417,6 +418,41 @@ class _MainPageState extends State<MainPage> {
       default:
         return OffLine(mainFeature: mainFeature,);
     }
+  }
+
+  Future<void> _checkPermissions() async {
+    var status = await Permission.manageExternalStorage.status;
+    if (!status.isGranted) {
+      // Request permission
+      if (await Permission.manageExternalStorage.request().isGranted) {
+        print("granted");
+      } else {
+        print("denied");
+        _showPermissionDeniedAlert();
+      }
+    }
+  }
+
+  void _showPermissionDeniedAlert() {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text('Permission Denied'),
+          content: Text(
+            'This app needs storage access to function properly. Please enable it in settings.',
+          ),
+          actions: [
+            TextButton(
+              child: Text('OK'),
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+            ),
+          ],
+        );
+      },
+    );
   }
 
   @override
