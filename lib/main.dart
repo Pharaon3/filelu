@@ -4060,39 +4060,58 @@ class MainFeature {
     }
 
     try {
+      if (uploadQueue[index]['isRemoved'] == true) {
+        print("Upload canceled before start.");
+        return "Upload canceled before start.";
+      }
+
       var request = http.MultipartRequest('POST', Uri.parse(serverUrl));
       request.fields.addAll({
         'utype': 'prem',
         'sess_id': sessionId,
       });
 
-      var fileStream = http.ByteStream(file.openRead()); // Read file as stream
+      var fileStream = file.openRead();
       var length = await file.length();
+      var controller = StreamController<List<int>>();
+
+      // Track progress
+      int uploadedBytes = 0;
+
+      StreamSubscription<List<int>>? subscription;
+      subscription = fileStream.listen(
+        (data) {
+          if (uploadQueue[index]['isRemoved'] == true) {
+            print("Upload canceled mid-way.");
+            subscription?.cancel(); // Stop reading the file
+            controller.close(); // Close the stream
+            return;
+          }
+          uploadedBytes += data.length;
+          double progress = uploadedBytes / length;
+          onProgress(progress); // Update UI
+          controller.add(data);
+        },
+        onDone: () {
+          controller.close();
+        },
+        onError: (error) {
+          controller.addError(error);
+        },
+        cancelOnError: true, // Stop on error
+      );
 
       var multipartFile = http.MultipartFile(
         'file_0',
-        fileStream,
+        controller.stream,
         length,
         filename: filePath.split('/').last,
       );
 
       request.files.add(multipartFile);
 
-      // Track progress
-      int uploadedBytes = 0;
-      Stream<List<int>> stream = fileStream.transform(
-        StreamTransformer.fromHandlers(handleData: (data, sink) {
-          uploadedBytes += data.length;
-          double progress = uploadedBytes / length;
-          onProgress(progress); // Update UI
-          sink.add(data);
-        }),
-      );
-
-      multipartFile = http.MultipartFile('file_0', stream, length, filename: filePath.split('/').last);
-      request.files[0] = multipartFile;
-
-      http.StreamedResponse response = await request.send();
+      var client = http.Client();
+      http.StreamedResponse response = await client.send(request);
 
       if (response.statusCode == 200) {
         String responseString = await response.stream.bytesToString();
