@@ -3635,7 +3635,11 @@ class _MyAccountState extends State<MyAccount> {
     // Sample data
     String email = userInfo['email'];
     String accountType = userInfo['utype'] == "prem" ? "Premium" : "Standard";
-    double usedSpace = double.parse(userInfo['storage_used']) * 100;
+    double usedSpace = double.parse(userInfo['storage_used']);
+    
+    double totalSpace = double.parse(userInfo['storage']);
+    double usedSpacePercent = (usedSpace / totalSpace) * 100;
+
     
     return Scaffold(
       backgroundColor: Colors.white,
@@ -3659,30 +3663,65 @@ class _MyAccountState extends State<MyAccount> {
             Text(accountType, style: TextStyle(fontSize: 16, color: accountType == "Premium" ? Colors.green : Colors.red)),
             SizedBox(height: 20),
             
-            Text("Disk Usage:", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-            SizedBox(height: 5),
-            Stack(
-              children: [
-                Container(
-                  width: double.infinity,
-                  height: 20,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(10),
-                    color: Colors.grey[300],
+            Text("Disk Usage: ",
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              SizedBox(height: 5),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween, // This places the items on the left and right ends
+                children: [
+                  RichText(
+                    text: TextSpan(
+                      children: [
+                        TextSpan(
+                          text: "$usedSpace GB", 
+                          style: TextStyle(
+                            color: Color(0xFF12AFE4), // Light Blue color
+                            fontSize: 16, 
+                            fontWeight: FontWeight.bold
+                          ),
+                        ),
+                        TextSpan(
+                          text: " of $totalSpace GB", 
+                          style: TextStyle(
+                            color: Colors.black, // Default color
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-                Container(
-                  width: MediaQuery.of(context).size.width * (usedSpace / 100),
-                  height: 20,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(10),
-                    color: Colors.blue,
+                  Text(
+                    "$usedSpacePercent%", 
+                    style: TextStyle(
+                      fontSize: 14, 
+                      fontWeight: FontWeight.bold,
+                      color: const Color.fromARGB(255, 82, 81, 81), // You can customize this color if needed
+                    ),
                   ),
-                ),
-              ],
-            ),
-            SizedBox(height: 5),
-            Text("$usedSpace% occupied", style: TextStyle(fontSize: 14)),
+                ],
+              ),
+              SizedBox(height: 5),
+              Stack(
+                children: [
+                  Container(
+                    width: double.infinity,
+                    height: 10,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(5),
+                      color: Colors.grey[300],
+                    ),
+                  ),
+                  Container(
+                    width: MediaQuery.of(context).size.width * (usedSpace / totalSpace),
+                    height: 10,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(5),
+                      color: Colors.blue,
+                    ),
+                  ),
+                ],
+              ),
           ],
         ),
       ),
