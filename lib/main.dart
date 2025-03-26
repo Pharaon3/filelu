@@ -457,8 +457,8 @@ class _MainPageState extends State<MainPage> {
 
   @override
   Widget build(BuildContext context) {
-    if (mainFeature.isOffline) return OffLine(mainFeature: mainFeature);
     if (mainFeature.sessionId == "" && mainFeature.isOffline == true) return LoginPage();
+    if (mainFeature.isOffline) return OffLine(mainFeature: mainFeature);
     return Scaffold(
       body: _getPageContent(),
       bottomNavigationBar: BottomNavigationBar(
@@ -3846,6 +3846,15 @@ class MainFeature {
     try {
       final response = await http.get(Uri.parse(url));
       if (response.statusCode == 200) {
+        dynamic responseBody = jsonDecode(response.body);
+        if (responseBody['status'] == 403 && responseBody['msg'] == "Invalid auth") {
+          print("session expired");
+          final prefs = await SharedPreferences.getInstance();
+          prefs.setString('sessionId', "");
+          sessionId = "";
+          setOffline(true);
+          return;
+        }
         return response;
       } else if (response.statusCode == 403) {
         print("Offline");
@@ -3856,6 +3865,15 @@ class MainFeature {
         try {
           final response = await http.get(Uri.parse(url));
           if (response.statusCode == 200) {
+            dynamic responseBody = jsonDecode(response.body);
+            if (responseBody['status'] == 403 && responseBody['msg'] == "Invalid auth") {
+              print("session expired");
+              final prefs = await SharedPreferences.getInstance();
+              prefs.setString('sessionId', "");
+              sessionId = "";
+              setOffline(true);
+              return;
+            }
             return response;
           } else if (response.statusCode == 403) {
             print("Offline");
@@ -3875,6 +3893,15 @@ class MainFeature {
       try {
         final response = await http.get(Uri.parse(url));
         if (response.statusCode == 200) {
+          dynamic responseBody = jsonDecode(response.body);
+          if (responseBody['status'] == 403 && responseBody['msg'] == "Invalid auth") {
+            print("session expired");
+            final prefs = await SharedPreferences.getInstance();
+            prefs.setString('sessionId', "");
+            sessionId = "";
+            setOffline(true);
+            return;
+          }
           return response;
         } else if (response.statusCode == 403) {
           print("Offline");
@@ -4414,7 +4441,6 @@ class MainFeature {
   }
 
   Future<void> _performSync(SyncOrder order) async {
-    print('perform sync');
     switch (order.syncType) {
       case "Upload Only":
         await uploadFolder(order.localPath, order.fld_id);
@@ -4426,7 +4452,6 @@ class MainFeature {
         await _onewaySync(order.localPath, order.fld_id);
         break;
       case "Two-Way Sync":
-        print("syncedFileFolders: $syncedFileFolders");
         await _twowaySync(order.localPath, order.fld_id, _findFolderData(syncedFileFolders, order.fld_id));
         break;
     }
