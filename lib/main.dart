@@ -2511,7 +2511,13 @@ class _MyFilesPageState extends State<MyFilesPage> {
   Future<void> _pickFiles() async {
     List<String> selectedFiles = [];
     try {
+      setState(() {
+        isLoading = true;
+      });
       final result = await FilePicker.platform.pickFiles(allowMultiple: true);
+      setState(() {
+        isLoading = false;
+      });
       if (result != null) {
         selectedFiles = result.paths.map((path) => path!).toList();
         for(int i = 0; i < selectedFiles.length; i ++) {
@@ -4040,25 +4046,19 @@ class MainFeature {
     }
     
     if (!isSyncing) {
-      print("!isSyncing");
       isSyncing = true;
       if (uploadQueue.isEmpty || uploadQueue.length == currentUploadingItemIndex) {
         if (downloadQueue.isEmpty || downloadQueue.length == currentDownloadingItemIndex) {
-          print("if-if");
           try {
-            print("try");
             for (int index = 0; index < syncOrders.length; index++) {
               if (syncOrders[index].isRunning) {
                 await _performSync(syncOrders[index]);
               }
             }
           } catch (e) {
-            print("catch");
             print("Error during sync: $e");
           } finally {
-            print("finally");
             if (currentUploadingItemIndex + currentDownloadingItemIndex > lastScanCount) {
-              print("finally - if");
               dynamic scanedData = await _scanCloudFiles("", "0");
               syncedFileFolders = scanedData;
               _saveGlobal('scaned_data', scanedData);
