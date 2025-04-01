@@ -17,6 +17,7 @@ import 'dart:async';
 import 'package:open_file/open_file.dart';
 import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:chewie/chewie.dart';
 
 Map<int, http.StreamedResponse?> activeDownloads = {}; // Stores active requests
 const String baseURL = "https://filelu.com/app";
@@ -3796,21 +3797,27 @@ class VideoPlayerScreen extends StatefulWidget {
 }
 
 class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
-  late VideoPlayerController _controller;
+  late VideoPlayerController _videoPlayerController;
+  late ChewieController _chewieController;
 
   @override
   void initState() {
     super.initState();
-    _controller = VideoPlayerController.file(widget.videoFile)
-      ..initialize().then((_) {
-        setState(() {});
-        _controller.play();
-      });
+    _videoPlayerController = VideoPlayerController.file(widget.videoFile);
+    _chewieController = ChewieController(
+      videoPlayerController: _videoPlayerController,
+      autoPlay: true,
+      looping: false,
+      aspectRatio: _videoPlayerController.value.aspectRatio,
+      allowedScreenSleep: false,
+      showControls: true,
+    );
   }
 
   @override
   void dispose() {
-    _controller.dispose();
+    _videoPlayerController.dispose();
+    _chewieController.dispose();
     super.dispose();
   }
 
@@ -3819,20 +3826,9 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     return Scaffold(
       appBar: AppBar(title: Text("Video Player")),
       body: Center(
-        child: _controller.value.isInitialized
-            ? AspectRatio(
-                aspectRatio: _controller.value.aspectRatio,
-                child: VideoPlayer(_controller),
-              )
-            : CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(Colors.blue)),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          setState(() {
-            _controller.value.isPlaying ? _controller.pause() : _controller.play();
-          });
-        },
-        child: Icon(_controller.value.isPlaying ? Icons.pause : Icons.play_arrow, color: Colors.blue),
+        child: Chewie(
+          controller: _chewieController,
+        ),
       ),
     );
   }
