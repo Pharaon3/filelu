@@ -52,6 +52,7 @@ dependencies:
   flutter_launcher_icons: ^0.14.3
   share_plus: ^10.1.4
   chewie: ^1.11.0
+  flutter_sound: ^9.28.0
 
 dev_dependencies:
   flutter_test:
