@@ -18,7 +18,6 @@ import 'package:open_file/open_file.dart';
 import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:chewie/chewie.dart';
-import 'package:flutter_sound/flutter_sound.dart';
 
 Map<int, http.StreamedResponse?> activeDownloads = {}; // Stores active requests
 const String baseURL = "https://filelu.com/app";
@@ -2038,11 +2037,38 @@ class _MyFilesPageState extends State<MyFilesPage> {
 
   // Play audio file
   void _playAudioFile(BuildContext context, File file) {
+    AudioPlayer audioPlayer = AudioPlayer();
+    audioPlayer.play(DeviceFileSource(file.path));
+
     showDialog(
       context: context,
-      barrierDismissible: true,
-      builder: (context) => AudioPlayerDialog(file: file),
-    );
+      barrierDismissible: true, // Makes the dialog dismissable by tapping outside
+      builder: (context) {
+        return AlertDialog(
+          title: Text("Audio Player"),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.audiotrack, size: 50, color: Colors.blue),
+              SizedBox(height: 10),
+              Text("Playing: ${file.path.split('/').last}"),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                audioPlayer.stop();
+                Navigator.pop(context);
+              },
+              child: Text("Stop"),
+            ),
+          ],
+        );
+      },
+    ).then((value) {
+      // Ensure that audio is stopped when dialog is dismissed (by tapping outside)
+      audioPlayer.stop();
+    });
   }
 
   // Play video file
@@ -3808,125 +3834,6 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   }
 }
 
-class AudioPlayerDialog extends StatefulWidget {
-  final File file;
-  
-  AudioPlayerDialog({required this.file});
-
-  @override
-  _AudioPlayerDialogState createState() => _AudioPlayerDialogState();
-}
-
-class _AudioPlayerDialogState extends State<AudioPlayerDialog> {
-  late AudioPlayer _audioPlayer;
-  Duration _duration = Duration.zero;
-  Duration _position = Duration.zero;
-  bool _isPlaying = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _audioPlayer = AudioPlayer();
-    _setupAudioPlayer();
-  }
-
-  void _setupAudioPlayer() async {
-    _audioPlayer.onDurationChanged.listen((duration) {
-      setState(() => _duration = duration);
-    });
-
-    _audioPlayer.onPositionChanged.listen((position) {
-      setState(() => _position = position);
-    });
-
-    _audioPlayer.onPlayerComplete.listen((event) {
-      setState(() => _isPlaying = false);
-    });
-
-    // Ensure duration is loaded before UI renders
-    await _audioPlayer.setSource(DeviceFileSource(widget.file.path));
-    _duration = await _audioPlayer.getDuration() ?? Duration.zero;
-    setState(() {});
-  }
-
-
-  void _togglePlayPause() async {
-    if (_isPlaying) {
-      await _audioPlayer.pause();
-    } else {
-      await _audioPlayer.play(DeviceFileSource(widget.file.path));
-    }
-    setState(() => _isPlaying = !_isPlaying);
-  }
-
-  void _seekAudio(double value) {
-    _audioPlayer.seek(Duration(seconds: value.toInt()));
-  }
-
-  String _formatDuration(Duration duration) {
-    String twoDigits(int n) => n.toString().padLeft(2, "0");
-    final minutes = twoDigits(duration.inMinutes);
-    final seconds = twoDigits(duration.inSeconds.remainder(60));
-    return "$minutes:$seconds";
-  }
-
-  @override
-  void dispose() {
-    _audioPlayer.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: Text("Audio Player"),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.audiotrack, size: 50, color: Colors.blue),
-          SizedBox(height: 10),
-          Text("Playing: ${widget.file.path.split('/').last}"),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(_formatDuration(_position)),
-              Expanded(
-                child: Slider(
-                  min: 0,
-                  max: _duration.inSeconds.toDouble(),
-                  value: _position.inSeconds.toDouble(),
-                  onChanged: _seekAudio,
-                  activeColor: Colors.blue, // Set active color to blue
-                  inactiveColor: Colors.blue.withOpacity(0.3), // Light blue for track
-                ),
-              ),
-              Text(_formatDuration(_duration)),
-            ],
-          ),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              IconButton(
-                icon: Icon(_isPlaying ? Icons.pause : Icons.play_arrow, size: 30),
-                onPressed: _togglePlayPause,
-              ),
-            ],
-          ),
-        ],
-      ),
-      actions: [
-        TextButton(
-          onPressed: () {
-            _audioPlayer.stop();
-            Navigator.pop(context);
-          },
-          child: Text("Close"),
-        ),
-      ],
-    );
-  }
-}
-
 class MainFeature {
   String sessionId = "";
   List<dynamic> uploadQueue = [];
@@ -4219,61 +4126,29 @@ class MainFeature {
         print("Upload canceled before start.");
         return "Upload canceled before start.";
       }
-
       var request = http.MultipartRequest('POST', Uri.parse(serverUrl));
       request.fields.addAll({
         'utype': 'prem',
         'sess_id': sessionId,
       });
 
-      var fileStream = file.openRead();
-      var length = await file.length();
-      var controller = StreamController<List<int>>();
-
-      // Track progress
-      int uploadedBytes = 0;
-
-      StreamSubscription<List<int>>? subscription;
-      subscription = fileStream.listen(
-        (data) {
-          if (uploadQueue[index]['isRemoved'] == true) {
-            print("Upload canceled mid-way.");
-            subscription?.cancel(); // Stop reading the file
-            controller.close(); // Close the stream
-            return;
-          }
-          uploadedBytes += data.length;
-          double progress = uploadedBytes / length;
-          onProgress(progress); // Update UI
-          controller.add(data);
-        },
-        onDone: () {
-          controller.close();
-        },
-        onError: (error) {
-          controller.addError(error);
-        },
-        cancelOnError: true, // Stop on error
-      );
-
-      var multipartFile = http.MultipartFile(
+      var multipartFile = await http.MultipartFile.fromPath(
         'file_0',
-        controller.stream,
-        length,
-        filename: filePath.split('/').last,
+        filePath,
       );
 
       request.files.add(multipartFile);
 
       var client = http.Client();
       http.StreamedResponse response = await client.send(request);
-
       if (response.statusCode == 200) {
         String responseString = await response.stream.bytesToString();
         uploadQueue[index]['progress'] = 1.0;
         print("Upload successful: $responseString");
         final List<dynamic> responseData = jsonDecode(responseString);
-        await moveFile(responseData[0]['file_code'], folderID);
+        if (folderID.toString() != "0") {
+          await moveFile(responseData[0]['file_code'], folderID);
+        }
         return responseData[0]['file_code'];
       } else {
         print("Upload failed: ${response.reasonPhrase}");
