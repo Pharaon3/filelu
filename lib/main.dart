@@ -19,6 +19,7 @@ import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:chewie/chewie.dart';
 
+
 Map<int, http.StreamedResponse?> activeDownloads = {}; // Stores active requests
 const String baseURL = "https://filelu.com/app";
 
@@ -2037,38 +2038,112 @@ class _MyFilesPageState extends State<MyFilesPage> {
 
   // Play audio file
   void _playAudioFile(BuildContext context, File file) {
-    AudioPlayer audioPlayer = AudioPlayer();
+    final audioPlayer = AudioPlayer();
+    Duration totalDuration = Duration.zero;
+    Duration currentPosition = Duration.zero;
+    bool isPlaying = true;
+
     audioPlayer.play(DeviceFileSource(file.path));
 
     showDialog(
       context: context,
-      barrierDismissible: true, // Makes the dialog dismissable by tapping outside
+      barrierDismissible: true,
       builder: (context) {
-        return AlertDialog(
-          title: Text("Audio Player"),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.audiotrack, size: 50, color: Colors.blue),
-              SizedBox(height: 10),
-              Text("Playing: ${file.path.split('/').last}"),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                audioPlayer.stop();
-                Navigator.pop(context);
-              },
-              child: Text("Stop"),
-            ),
-          ],
+        return StatefulBuilder(
+          builder: (context, setState) {
+            // Listen to position changes
+            audioPlayer.onPositionChanged.listen((pos) {
+              setState(() {
+                currentPosition = pos;
+              });
+            });
+
+            // Listen to duration updates
+            audioPlayer.onDurationChanged.listen((dur) {
+              setState(() {
+                totalDuration = dur;
+              });
+            });
+
+            // Listen to completion
+            audioPlayer.onPlayerComplete.listen((_) {
+              setState(() {
+                isPlaying = false;
+                currentPosition = totalDuration;
+              });
+            });
+
+            return AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              contentPadding: EdgeInsets.all(20),
+              title: Text("🎵 Audio Player", style: TextStyle(fontWeight: FontWeight.bold)),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.music_note, size: 60, color: Colors.blue),
+                  SizedBox(height: 10),
+                  Text(file.path.split('/').last, textAlign: TextAlign.center),
+                  SizedBox(height: 20),
+                  Slider(
+                    min: 0,
+                    max: totalDuration.inMilliseconds.toDouble(),
+                    value: currentPosition.inMilliseconds.clamp(0, totalDuration.inMilliseconds).toDouble(),
+                    activeColor: Colors.blue,         // Color of the progress
+                    inactiveColor: Colors.blue[100],  // Light blue for the remaining part
+                    onChanged: (value) async {
+                      final pos = Duration(milliseconds: value.toInt());
+                      await audioPlayer.seek(pos);
+                      setState(() {
+                        currentPosition = pos;
+                      });
+                    },
+                  ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(_formatDuration(currentPosition)),
+                      Text(_formatDuration(totalDuration)),
+                    ],
+                  ),
+                ],
+              ),
+              actions: [
+                IconButton(
+                  icon: Icon(isPlaying ? Icons.pause_circle_filled : Icons.play_circle_fill, size: 32),
+                  onPressed: () async {
+                    if (isPlaying) {
+                      await audioPlayer.pause();
+                    } else {
+                      await audioPlayer.resume();
+                    }
+                    setState(() {
+                      isPlaying = !isPlaying;
+                    });
+                  },
+                ),
+                TextButton(
+                  onPressed: () {
+                    audioPlayer.stop();
+                    Navigator.pop(context);
+                  },
+                  child: Text("Close"),
+                ),
+              ],
+            );
+          },
         );
       },
     ).then((value) {
-      // Ensure that audio is stopped when dialog is dismissed (by tapping outside)
       audioPlayer.stop();
     });
+  }
+
+  // Helper to format time
+  String _formatDuration(Duration duration) {
+    String twoDigits(int n) => n.toString().padLeft(2, '0');
+    final minutes = twoDigits(duration.inMinutes.remainder(60));
+    final seconds = twoDigits(duration.inSeconds.remainder(60));
+    return "$minutes:$seconds";
   }
 
   // Play video file
@@ -4093,8 +4168,7 @@ class MainFeature {
     }
   }
 
-  Future<String> uploadFile(
-    int index, Function(double) onProgress) async {
+  Future<String> uploadFile(int index, Function(double) onProgress) async {
     String filePath = uploadQueue[index]['filePath'];
     String folderID = uploadQueue[index]['folderID'];
     if (serverUrl.isEmpty) {
@@ -4126,32 +4200,51 @@ class MainFeature {
         print("Upload canceled before start.");
         return "Upload canceled before start.";
       }
-      var request = http.MultipartRequest('POST', Uri.parse(serverUrl));
-      request.fields.addAll({
-        'utype': 'prem',
-        'sess_id': sessionId,
-      });
 
-      var multipartFile = await http.MultipartFile.fromPath(
-        'file_0',
-        filePath,
+      final fileLength = await file.length();
+      final fileStream = file.openRead();
+
+      int bytesSent = 0;
+
+      final streamWithProgress = fileStream.transform(
+        StreamTransformer<List<int>, List<int>>.fromHandlers(
+          handleData: (data, sink) {
+            bytesSent += data.length;
+            onProgress(bytesSent / fileLength);
+            sink.add(data);
+          },
+        ),
       );
 
-      request.files.add(multipartFile);
+      final multipartFile = http.MultipartFile(
+        'file_0',
+        streamWithProgress,
+        fileLength,
+        filename: filePath.split('/').last,
+      );
 
-      var client = http.Client();
-      http.StreamedResponse response = await client.send(request);
-      if (response.statusCode == 200) {
-        String responseString = await response.stream.bytesToString();
+      final request = http.MultipartRequest('POST', Uri.parse(serverUrl))
+        ..fields.addAll({
+          'utype': 'prem',
+          'sess_id': sessionId,
+        })
+        ..files.add(multipartFile);
+
+      final client = http.Client();
+      final streamedResponse = await client.send(request);
+
+      if (streamedResponse.statusCode == 200) {
+        final responseString = await streamedResponse.stream.bytesToString();
         uploadQueue[index]['progress'] = 1.0;
         print("Upload successful: $responseString");
+
         final List<dynamic> responseData = jsonDecode(responseString);
         if (folderID.toString() != "0") {
           await moveFile(responseData[0]['file_code'], folderID);
         }
         return responseData[0]['file_code'];
       } else {
-        print("Upload failed: ${response.reasonPhrase}");
+        print("Upload failed: ${streamedResponse.reasonPhrase}");
         setOffline(true);
         uploadQueue[index]['isRemoved'] = true;
       }
@@ -4160,6 +4253,7 @@ class MainFeature {
       uploadQueue[index]['isRemoved'] = true;
       setOffline(true);
     }
+
     return "went wrong";
   }
 
