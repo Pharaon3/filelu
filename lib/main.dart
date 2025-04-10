@@ -4209,6 +4209,12 @@ class MainFeature {
       final streamWithProgress = fileStream.transform(
         StreamTransformer<List<int>, List<int>>.fromHandlers(
           handleData: (data, sink) {
+            if (uploadQueue[index]['isRemoved'] == true) {
+              print("Upload canceled during upload.");
+              sink.close(); // Stops the stream
+              throw Exception("Upload canceled by user.");
+            }
+
             bytesSent += data.length;
             onProgress(bytesSent / fileLength);
             sink.add(data);
@@ -4249,6 +4255,9 @@ class MainFeature {
         uploadQueue[index]['isRemoved'] = true;
       }
     } catch (e) {
+      if (uploadQueue[index]['isRemoved'] == true) {
+        return "Upload canceled";
+      }
       print("Upload error: $e");
       uploadQueue[index]['isRemoved'] = true;
       setOffline(true);
